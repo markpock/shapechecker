@@ -36,17 +36,17 @@ Follow the instructions on the Lean 4 installation guide.
 
 
 ### Roadmap
-	1.	MVP: Develop a working prototype that transpiles simple PyTorch tensor operations to Lean 4 and verifies shape correctness.
-	2.	Program Slicing: Implement slicing to isolate shape-relevant control flow from complex Python code.
-	3.	Descriptive and actionable error messages for developers.
-	4.	GUI Tooling: For increased usability. 
-	5.	Benchmarking: Test on real-world PyTorch programs from GitHub to evaluate effectiveness and performance.
+1.	MVP: Develop a working prototype that transpiles simple PyTorch tensor operations to Lean 4 and verifies shape correctness.
+2.	Program Slicing: Implement slicing to isolate shape-relevant control flow from complex Python code.
+3.	Descriptive and actionable error messages for developers.
+4.	GUI Tooling: For increased usability. 
+5.	Benchmarking: Test on real-world PyTorch programs from GitHub to evaluate effectiveness and performance.
 
 
 ### Acknowledgments
 
 This project draws inspiration from prior work, including:
-	•	[ShapeChecker: ShapeChecker: Inferring and Reasoning about Shapes in TensorFlow]([url](https://courses.cs.washington.edu/courses/cse503/18wi/submissions/503-final-report-20180315/shape-checker.pdf))
-	•	[Ezyang’s Blog: A Compile-Time Debugger for Tensor Shape Checks]([url](http://blog.ezyang.com/2018/04/a-compile-time-debugger-that-helps-you-write-tensor-shape-checks/))
+- [ShapeChecker: ShapeChecker: Inferring and Reasoning about Shapes in TensorFlow]([url](https://courses.cs.washington.edu/courses/cse503/18wi/submissions/503-final-report-20180315/shape-checker.pdf))
+- [Ezyang’s Blog: A Compile-Time Debugger for Tensor Shape Checks]([url](http://blog.ezyang.com/2018/04/a-compile-time-debugger-that-helps-you-write-tensor-shape-checks/))
 
 Special thanks to the Lean and PyTorch communities for their tools and resources.
