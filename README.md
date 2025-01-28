@@ -12,7 +12,7 @@ One of the most common classes of errors in machine learning programs is Tensor 
 
 As a multiplication of a 1 by 3 tensor and a 2 by 1 tensor, the operands have incompatible shape, and so the program produces the difficult-to-interpret runtime error:
 
-```ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature `(n?,k),(k,m?)->(n?,m?)` (size 2 is different from 3).```
+`ValueError: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 2 is different from 3).`
 
 Tensor shape mismatches are a frequent and frustrating source of bugs in Python's machine learning workflows. This error should not be difficult to diagnose, and a static analysis would almost certainly be able to catch this in a language with a stronger type system. However, static analysis in Python is made quite difficult by Python’s type system, and so even widely used Python type checkers like `mypy` are unable to collect the information required to report this error. 
 
