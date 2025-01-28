@@ -32,7 +32,7 @@ Follow the instructions on the Lean 4 installation guide.
 
 
 ### Usage: 
-<TBD>
+TBD~
 
 
 ### Roadmap
