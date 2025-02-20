@@ -1,21 +1,4 @@
-"""
-                1
-            2       3
-        4      2    3   4
-
-
-        1
-    3       2
-2   4   
-
-i = 1
-
-
-
-
-"""
 import ast
-
 
 def translate_operator(op):
     match op: 
@@ -105,6 +88,7 @@ class PythonToLeanTranslator(ast.NodeVisitor):
 
 def translate_code_to_lean(python_code: str) -> str:
     tree = ast.parse(python_code)
+    
     translator = PythonToLeanTranslator()
     return translator.translate(tree)
 
@@ -112,12 +96,12 @@ if __name__ == "__main__":
     code = """
 def tensor_add(
     a : Tensor['a', ...], 
-    b : Tensor[]  
+    b : Tensor[]
 ) -> 'Tensor (l + [a, b])':    
     return a + b
 
 print(tensor_add(torch.zeros((1, 2, 3)), torch.zeros((1, 2, 3))))
-"""
+    """
     lean_output = translate_code_to_lean(code)
     print("Translated Lean Code:")
     print(lean_output)
