@@ -1,5 +1,5 @@
-import Backend.PythonAdapter
 import Lean
+import Batteries
 
 open Lean
 
@@ -47,13 +47,70 @@ def Program := List FunDef
 
 end Py
 
+instance : Append Py.Shape where
+  append a b := .app a b
+notation a ":::" b => Py.Shape.cons a b
+notation "∅" => Py.Shape.nil
+instance : OfNat Py.ShapeData n where
+  ofNat := .const n
+
+namespace PyExample
 def tN : String -> Name := (Name.str .anonymous ·)
 
 #check (.app (.var $ tN "l") $ .cons (.var $ tN "a") $ .cons (.var $ tN "b") $ .nil : Py.Shape)
+end PyExample
+
+def Tensor (l : Py.Shape) := { ℓ : Py.Shape // l = ℓ }
+namespace Tensor
+def mk : Tensor l := ⟨l, by rfl⟩
+def of (l : Py.Shape) : Tensor l := ⟨l, by rfl⟩
+end Tensor
+
+def ElementwiseCompatible (a b : Py.Shape) : Prop := a = b
+def tensorAddPrimOp : Tensor a -> Tensor b -> ElementwiseCompatible a b -> Tensor a := λ _ _ _ => .mk
+
+inductive MatMulRel : Py.Shape -> Py.Shape -> Prop :=
+  | generalVar : MatMulRel
+    (.app l $ .cons _ $ .cons (.var n) $ .nil)
+    (.app l $ .cons (.var n) $ .cons _ $ .nil)
+  | generalConst : MatMulRel
+    (.app l $ .cons _ $ .cons (.const n) $ .nil)
+    (.app l $ .cons (.const n) $ .cons _ $ .nil)
+
+def tensorMatMulPrimOp :
+  Tensor (.app l $ .cons m $ .cons n $ .nil) ->
+  Tensor (.app l $ .cons n $ .cons d $ .nil) ->
+  MatMulRel
+    (.app l $ .cons m $ .cons n $ .nil) (.app l $ .cons n $ .cons d $ .nil) ->
+  Tensor (.app l $ .cons m $ .cons d $ .nil) := λ _ _ _ => .mk
+
+def isPrimOp (n : Name) : Bool :=
+  match n with
+  | .str .anonymous s =>
+    s == "tensorAddPrimOp" ||
+    s == "tensorMatMulPrimOp"
+  | _ => false
 
 open Elab Command Term Meta
 
+open Tactic
+
+syntax "resolve_prim_op_trivial" : tactic
+
+macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| omega)
+macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| simp; done)
+macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| trivial)
+macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| constructor)
+macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| simp_all)
+
+macro "resolvePrimOp" : tactic => `(tactic| first
+  | assumption
+  | resolve_prim_op_trivial
+  | fail "Failed to resolve primitive operation"
+)
+
 namespace ElabPy
+
 mutual
 partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   match e with
@@ -65,7 +122,10 @@ partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   | .var v => return mkIdent v
   | .add left right => `(($(<- expr left) + $(<- expr right)))
   | .matmul left right => `(($(<- expr left) @ $(<- expr right)))
-  | .call fn args => fncall fn args
+  | .call (.var n) args =>
+    if isPrimOp n then `($(<- fncall (.var n) args.reverse) (by resolvePrimOp))
+    else fncall (.var n) args.reverse
+  | .call fn args => fncall fn args.reverse
 
 partial def fncall (fn : Py.Expr) (args : List Py.Expr) : CommandElabM (TSyntax `term) := do
   match args with
@@ -81,28 +141,26 @@ def stmt (s : List Py.Stmt) (r : Py.Expr) : CommandElabM (TSyntax `term) := do
     $(<- stmt xs r)
   )
 
-def Tensor (l : Py.Shape) := { ℓ : Py.Shape // l = ℓ }
-
 def unAnnot : Py.Shape -> CommandElabM (TSyntax `term) := λ s => do
   match s with
-  | .nil => return mkIdent `Py.Shape.nil
+  | .nil => `(∅)
   | .wildcard => return mkIdent `Py.Shape.wildcard
   | .var x => `($(mkIdent `Py.Shape.var) $(mkIdent x))
   | .cons .wildcard rest =>
-    `($(mkIdent `Py.Shape.cons) $(mkIdent `Py.Shape.wildcard) $(<- unAnnot rest))
+    `($(mkIdent `Py.Shape.wildcard) ::: $(<- unAnnot rest))
   | .cons (.var x) rest =>
-    `($(mkIdent `Py.Shape.cons) ($(mkIdent `Py.Shape.var) $(mkIdent x)) $(<- unAnnot rest))
+    `(($(mkIdent `Py.ShapeData.var) $(mkIdent x)) ::: $(<- unAnnot rest))
   | .cons (.const n) rest =>
-    `($(mkIdent `Py.Shape.cons) ($(mkIdent `Py.Shape.const) $(quote n)) $(<- unAnnot rest))
+    `($(quote n) ::: $(<- unAnnot rest))
   | .app op1 op2 => do
-    `($(mkIdent `Py.Shape.app) $(<- unAnnot op1) $(<- unAnnot op2))
+    `($(<- unAnnot op1) ++ $(<- unAnnot op2))
 
 def typ : Py.Typ -> CommandElabM (TSyntax `term) := λ t => do
   match t with
   | .int => return mkIdent `Int
   | .float => return mkIdent `Float
   | .list t => `($(mkIdent `List) $(<- typ t))
-  | .tensor annot => `($(mkIdent `ElabPy.Tensor) $(<- unAnnot annot))
+  | .tensor annot => `($(mkIdent `Tensor) $(<- unAnnot annot))
 
 def func : Py.FunDef -> CommandElabM (TSyntax `command) :=
   λ ⟨n, p, b, r, rt⟩ => do
@@ -133,35 +191,3 @@ syntax (name := pyFuncCmd) "#pyFunc" term : command
     elabCommand cmd
     liftTermElabM $ Tactic.TryThis.addSuggestion cmd.raw {suggestion := .tsyntax cmd}
   | _ => throwUnsupportedSyntax
-
-
-def exampleFunction : Py.FunDef := {
-  name := `qual
-  params := [
-    (`a, .int),
-    (`b, .int)
-  ]
-  body := [
-    .assign `x $ .var `a,
-    .assign `y $ .add (.var `x) (.int 1)
-  ]
-  retval := .var `x
-  rettyp := .int
-}
-
-def tensorAdd : Py.FunDef := {
-  name := `tensorAddN
-  params := [
-    (`a, .tensor (.var `l)),
-    (`b, .tensor (.var `l))
-  ]
-  body := []
-  retval := .add (.var `a) (.var `b)
-  rettyp := .tensor (.var `l)
-}
-
-
-def tensorAddN :
-    ElabPy.Tensor (Py.Shape.var l) ->
-      ElabPy.Tensor (Py.Shape.var l) -> ElabPy.Tensor (Py.Shape.var l) :=
-  λ a b => (a + b)

@@ -1,11 +1,13 @@
 import ast
 import astpretty
 
-code = """
+code = \
+"""
 def tensor_add(
     a : 'Tensor (l + [a, b])',
     b : 'Tensor (l + [a, b])'
 ) -> 'Tensor (l + [a, b])':
+    x = torch.zeros(a, b)
     return a + b
 """
 

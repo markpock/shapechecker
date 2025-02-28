@@ -14,5 +14,11 @@
     },
     "files.watcherExclude": {
         "**/target": true
+    },
+    "files.associations": {
+        ".fantomasignore": "ignore",
+        "*.v": "coq",
+        "python.h": "c",
+        "typeinfo": "cpp"
     }
 }

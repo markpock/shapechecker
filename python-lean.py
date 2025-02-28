@@ -1,8 +1,8 @@
 '''
 # In Python (Code -> AST)
 def tensor_add(
-    a : 'Tensor['a', ...]', 
-    b : 'Tensor['b', ...]'
+    a : 'Tensor (l + [a, b])', 
+    b : 'Tensor (l + [a, b])'
 ) -> 'Tensor (l + [a, b])':    
     return a + b
 
@@ -241,8 +241,8 @@ def test_conversion():
     """Test the AST to dictionary conversion with an example"""
     code = """
 def tensor_add(
-    a : "Tensor['a', ...]", 
-    b : "Tensor['b', ...]"
+    a : 'Tensor (l + [a, b])', 
+    b : 'Tensor (l + [a, b])'
 ) -> 'Tensor (l + [a, b])':    
     return a + b
 """
