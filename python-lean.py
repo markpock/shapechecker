@@ -1,15 +1,28 @@
+'''
+# In Python (Code -> AST)
+def tensor_add(
+    a : 'Tensor['a', ...]', 
+    b : 'Tensor['b', ...]'
+) -> 'Tensor (l + [a, b])':    
+    return a + b
+
+# In Lean (AST)
+def tensor_add (a : Tensor 'a ...) (b : Tensor) : Tensor (l + [a, b]) :=
+  a + b
+
+'''
 import ast
+import json
 
 def translate_operator(op):
-    match op: 
-        case isinstance(op, ast.Add):
-            return "+"
-        case isinstance(op, ast.Sub):
-            return "-"
-        case isinstance(op, ast.Mult):
-            return "*"
-        case isinstance(op, ast.Div):
-            return "/"
+    if isinstance(op, ast.Add):
+        return "+"
+    elif isinstance(op, ast.Sub):
+        return "-"
+    elif isinstance(op, ast.Mult):
+        return "*"
+    elif isinstance(op, ast.Div):
+        return "/"
     return "?"
 
 class PythonToLeanTranslator(ast.NodeVisitor):
@@ -44,7 +57,7 @@ class PythonToLeanTranslator(ast.NodeVisitor):
             if isinstance(stmt, ast.Return):
                 body_expr = self.visit(stmt.value)
             else:
-                body_expr += self.generic_visit(stmt)
+                body_expr += self.visit(stmt)
         
         # Construct the Lean function definition.
         lean_def = f"def {func_name} ({args_str}) : {ret_type} :=\n  {body_expr}"
@@ -58,17 +71,16 @@ class PythonToLeanTranslator(ast.NodeVisitor):
         left = self.visit(node.left)
         right = self.visit(node.right)
         op = translate_operator(node.op)
-        return f"({left} {op} {right})"
+        return f"{left} {op} {right}"
     
     def visit_Name(self, node: ast.Name):
         return node.id
     
     def visit_Constant(self, node: ast.Constant):
+        if isinstance(node.value, str):
+            # Handle string constants, especially for type annotations
+            return node.value
         return repr(node.value)
-    
-    # For Python versions < 3.8, strings may come as ast.Str
-    def visit_Str(self, node: ast.Str):
-        return node.s
     
     def visit_Expr(self, node: ast.Expr):
         return self.visit(node.value)
@@ -82,26 +94,161 @@ class PythonToLeanTranslator(ast.NodeVisitor):
         value = self.visit(node.value)
         return f"{value}.{node.attr}"
     
+    def visit_Subscript(self, node: ast.Subscript):
+        # Handle subscript notation like Tensor['a', ...]
+        value = self.visit(node.value)
+        slice_value = self.visit(node.slice)
+        return f"{value} {slice_value}"
+    
+    def visit_Index(self, node: ast.Index):
+        # For Python < 3.9
+        return self.visit(node.value)
+    
+    def visit_Tuple(self, node: ast.Tuple):
+        elts = [self.visit(elt) for elt in node.elts]
+        return " ".join(elts)
+    
+    def visit_Constant(self, node: ast.Constant):
+        if isinstance(node.value, str):
+            # Special case for tensor type annotations
+            if "Tensor" in node.value:
+                # Extract the tensor parameters from the string
+                return node.value.replace("'", "")
+            return f"'{node.value}'"
+        return str(node.value)
+    
+    def visit_Ellipsis(self, node: ast.Ellipsis):
+        return "..."
+    
+    def visit_List(self, node: ast.List):
+        elts = [self.visit(elt) for elt in node.elts]
+        return f"[{', '.join(elts)}]"
+    
+    def visit_BinOp(self, node: ast.BinOp):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        op = translate_operator(node.op)
+        return f"{left} {op} {right}"
+    
+    def visit_JoinedStr(self, node: ast.JoinedStr):
+        # Handle f-strings
+        values = []
+        for value in node.values:
+            values.append(self.visit(value))
+        return "".join(values)
+    
+    def visit_FormattedValue(self, node: ast.FormattedValue):
+        # Part of f-string handling
+        return "{" + self.visit(node.value) + "}"
+    
+    def visit_Starred(self, node: ast.Starred):
+        # Handle starred expressions like *args
+        return f"*{self.visit(node.value)}"
+    
     def generic_visit(self, node):
         # Fallback: for nodes we haven't explicitly handled.
         return f"<{node.__class__.__name__}>"
 
-def translate_code_to_lean(python_code: str) -> str:
-    tree = ast.parse(python_code)
-    
-    translator = PythonToLeanTranslator()
-    return translator.translate(tree)
 
-if __name__ == "__main__":
+def ast_to_dict(node) -> dict:
+    """
+    Converts a Python AST to a clean dictionary structure with only the essential 
+    information needed for Lean translation.
+    
+    Args:
+        node: An AST node
+        
+    Returns:
+        A dictionary representation with just the needed information
+    """
+    if node is None:
+        return None
+    
+    if isinstance(node, ast.Module):
+        # Only process the first function definition in the module
+        for stmt in node.body:
+            if isinstance(stmt, ast.FunctionDef):
+                return ast_to_dict(stmt)
+        return {}
+    
+    elif isinstance(node, ast.FunctionDef):
+        # Extract function information
+        result = {
+            "name": node.name,
+            "args": [],
+            "body": {}
+        }
+        
+        # Process arguments
+        for arg in node.args.args:
+            arg_info = {"name": arg.arg}
+            if arg.annotation and isinstance(arg.annotation, ast.Constant):
+                arg_info["type"] = arg.annotation.value
+            result["args"].append(arg_info)
+        
+        # Process return type if present
+        if node.returns and isinstance(node.returns, ast.Constant):
+            result["return_type"] = node.returns.value
+        
+        # Process function body (assume it's a return statement)
+        for stmt in node.body:
+            if isinstance(stmt, ast.Return):
+                result["body"] = ast_to_dict(stmt.value)
+        
+        return result
+    
+    elif isinstance(node, ast.BinOp):
+        # Process binary operation
+        op_map = {
+            ast.Add: "+",
+            ast.Sub: "-",
+            ast.Mult: "*",
+            ast.Div: "/"
+        }
+        
+        op_symbol = "?"
+        if isinstance(node.op, tuple(op_map.keys())):
+            op_symbol = op_map[type(node.op)]
+        
+        return {
+            "operation": op_symbol,
+            "left": ast_to_dict(node.left),
+            "right": ast_to_dict(node.right)
+        }
+    
+    elif isinstance(node, ast.Name):
+        # Process variable names
+        return {"variable": node.id}
+    
+    # Fallback for any other nodes
+    return {"unhandled": node.__class__.__name__}
+
+def prune_and_convert(python_code):
+    """
+    Parse Python code, prune the AST, and convert to dictionary format
+    
+    Args:
+        python_code: Python code as a string
+        
+    Returns:
+        Dictionary representation of the pruned AST
+    """
+    tree = ast.parse(python_code)
+    ast_dict = ast_to_dict(tree)
+    return ast_dict
+
+def test_conversion():
+    """Test the AST to dictionary conversion with an example"""
     code = """
 def tensor_add(
-    a : Tensor['a', ...], 
-    b : Tensor[]
+    a : "Tensor['a', ...]", 
+    b : "Tensor['b', ...]"
 ) -> 'Tensor (l + [a, b])':    
     return a + b
+"""
+    result = prune_and_convert(code)
+    print(type(result))
+    print(json.dumps(result, indent=2))
 
-print(tensor_add(torch.zeros((1, 2, 3)), torch.zeros((1, 2, 3))))
-    """
-    lean_output = translate_code_to_lean(code)
-    print("Translated Lean Code:")
-    print(lean_output)
+if __name__ == "__main__":
+    test_conversion()
