@@ -1,4 +1,5 @@
-import Backend.Basic
+import ShapeChecker.Backend.Basic
+
 import Lean
 open Lean
 

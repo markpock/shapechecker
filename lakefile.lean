@@ -1,7 +1,7 @@
 import Lake
 open Lake DSL
 
-package "Backend" where
+package "ShapeChecker" where
   -- Settings applied to both builds and interactive editing
   leanOptions := #[
     ⟨`pp.unicode.fun, true⟩ -- pretty-prints `fun a ↦ b`
@@ -14,7 +14,7 @@ require Parser from git "https://github.com/fgdorais/lean4-parser"
 module_data alloy.c.o.export : BuildJob System.FilePath
 module_data alloy.c.o.noexport : BuildJob System.FilePath
 
-lean_lib «Backend» where
+lean_lib «ShapeChecker» where
   precompileModules := true
   nativeFacets := fun shouldExport =>
     if shouldExport then #[Module.oExportFacet, `alloy.c.o.export]
@@ -41,6 +41,6 @@ extern_lib pythonItself := do
   return BuildJob.pure $ "/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versions/3.13/lib/libpython3.13.dylib"
 
 @[default_target]
-lean_exe «BackendExe» where
+lean_exe «ShapeCheckerExe» where
   root := `Main
   supportInterpreter := true

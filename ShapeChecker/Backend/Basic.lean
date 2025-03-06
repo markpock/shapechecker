@@ -1,5 +1,4 @@
 import Lean
-import Batteries
 
 open Lean
 

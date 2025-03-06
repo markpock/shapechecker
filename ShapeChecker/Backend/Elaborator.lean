@@ -1,8 +1,8 @@
 import Lean
-import Backend.Basic
-import Backend.AST
-import Backend.Tensors
-import Backend.Verifier
+import ShapeChecker.Backend.Basic
+import ShapeChecker.Backend.AST
+import ShapeChecker.Backend.Tensors
+import ShapeChecker.Backend.Verifier
 
 open Lean Elab Command Term Meta Tactic
 

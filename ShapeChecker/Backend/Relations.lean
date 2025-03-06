@@ -1,5 +1,5 @@
-import Backend.Basic
-import Backend.Tensors
+import ShapeChecker.Backend.Basic
+import ShapeChecker.Backend.Tensors
 
 def ElementwiseCompatible (a b : Py.Shape) : Prop := a = b
 

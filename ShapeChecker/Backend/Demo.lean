@@ -1,5 +1,5 @@
-import Backend.Basic
-import Backend.Elaborator
+import ShapeChecker.Backend.Basic
+import ShapeChecker.Backend.Elaborator
 
 /-
 def exa(a : int, b : int) -> int:
