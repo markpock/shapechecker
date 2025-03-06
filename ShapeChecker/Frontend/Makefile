@@ -9,7 +9,7 @@ PYTHON_INCLUDES = -I$(PYTHON_PREFIX)/include/python$(PYTHON_VERSION)
 PYTHON_LIBS = $(PYTHON_PREFIX)/lib/libpython$(PYTHON_VERSION).dylib
 
 # Build directory
-BUILD_DIR = ../build
+BUILD_DIR = ../../.build
 
 # Library name
 LIBRARY_NAME = $(BUILD_DIR)/libpython_adapter.a

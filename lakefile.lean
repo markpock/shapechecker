@@ -20,22 +20,22 @@ lean_lib «ShapeChecker» where
     if shouldExport then #[Module.oExportFacet, `alloy.c.o.export]
     else #[Module.oNoExportFacet, `alloy.c.o.noexport]
 
--- extern_lib extlib pkg := do
---   -- Supposedly, tracks PythonAdapter.c as an input.
---   let _ <- inputTextFile <| pkg.dir / "Backend" / "PythonAdapter.c"
+extern_lib extlib pkg := do
+  -- Supposedly, tracks PythonAdapter.c as an input.
+  let _ <- inputTextFile <| pkg.dir  / "ShapeChecker" / "PythonAdapter.c"
 
---   proc {
---     cmd := "make"
---     cwd := some $ pkg.dir / "Backend"
---   }
+  proc {
+    cmd := "make"
+    cwd := some $ pkg.dir / "ShapeChecker" / "Frontend"
+  }
 
---   proc {
---     cmd := "ranlib"
---     args := #["libpython_adapter.a"]
---     cwd := some $ pkg.dir / "build"
---   }
+  proc {
+    cmd := "ranlib"
+    args := #["libpython_adapter.a"]
+    cwd := some $ pkg.dir / ".build"
+  }
 
---   return .pure $ pkg.dir / "build" / "libpython_adapter.a"
+  return .pure $ pkg.dir / ".build" / "libpython_adapter.a"
 
 extern_lib pythonItself := do
   return BuildJob.pure $ "/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versions/3.13/lib/libpython3.13.dylib"
@@ -44,3 +44,11 @@ extern_lib pythonItself := do
 lean_exe «ShapeCheckerExe» where
   root := `Main
   supportInterpreter := true
+
+-- target myCleanPkg : FilePath := do
+--   IO.FS.removeDirAll "build" -- Remove Lake's default build directory
+--   IO.FS.removeDirAll "extra_temp" -- Remove an additional folder
+--   pure "custom clean task completed"
+
+-- -- Make `lake clean` also call `myCleanPkg`
+-- require_clean myCleanPkg
