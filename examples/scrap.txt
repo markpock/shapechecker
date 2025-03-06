@@ -5,6 +5,7 @@ open Lean
 
 namespace Py
 
+-- TODO: Have to interchange Shape DSL for generalized theory of lists
 inductive ShapeData :=
   | wildcard
   | var (x : Name)
@@ -14,6 +15,7 @@ inductive Shape :=
   | nil
   | wildcard
   | var (x : Name)
+  -- x::(s : Shape)
   | cons (data : ShapeData) (rest : Shape)
   | app (op1 op2 : Shape)
 
@@ -21,8 +23,10 @@ inductive Typ :=
   | int
   | float
   | list (t : Typ)
-  | tensor (annot : Shape)
+  | tensor (annot : List Nat)
 
+
+-- TODO: Add some more operators
 inductive Expr :=
   | int (n : Int)
   | float (f : Float)
@@ -32,6 +36,7 @@ inductive Expr :=
   | matmul (left right : Expr)
   | call (fn : Expr) (args : List Expr)
 
+-- TODO: Add some more statements
 inductive Stmt :=
   | assign : Name -> Expr -> Stmt
 
@@ -69,6 +74,7 @@ end Tensor
 def ElementwiseCompatible (a b : Py.Shape) : Prop := a = b
 def tensorAddPrimOp : Tensor a -> Tensor b -> ElementwiseCompatible a b -> Tensor a := λ _ _ _ => .mk
 
+-- l ++ [a, n], l ++ [n, b]
 inductive MatMulRel : Py.Shape -> Py.Shape -> Prop :=
   | generalVar : MatMulRel
     (.app l $ .cons _ $ .cons (.var n) $ .nil)
@@ -93,6 +99,26 @@ def isPrimOp (n : Name) : Bool :=
 
 open Elab Command Term Meta
 
+def compose {A B C : Sort} (f : A -> B) (g : B -> C) (a : A) : C :=
+  g (f a)
+
+
+
+
+example {P Q R : Prop} : (P -> Q) -> (Q -> R) -> (P -> R) := by
+  exact compose
+
+  -- intro a
+  -- intro b
+  -- intro c
+
+  -- exact b (a c)
+
+
+
+
+
+
 open Tactic
 
 syntax "resolve_prim_op_trivial" : tactic
@@ -109,29 +135,103 @@ macro "resolvePrimOp" : tactic => `(tactic| first
   | fail "Failed to resolve primitive operation"
 )
 
+#check Parser.Term.bracketedBinder
+#check `(bracketedBinder| (x : A))
+
 namespace ElabPy
 
-mutual
-partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
+#eval ["tensor", "add"]
+#eval `tensor.add
+
+
+private theorem sizeOfIncForSimpleAppend {l : List Py.Expr} : 1 + sizeOf x + sizeOf l = sizeOf (l ++ [x]) := by
+  induction l
+  case nil =>
+    simp
+  case cons hd tl ih =>
+    simp
+    rw [<- ih]
+    conv =>
+      lhs
+      rw [Nat.add_assoc]
+      rhs
+      rw [<-Nat.add_assoc]
+      lhs
+      rw [Nat.add_comm]
+      lhs
+      rw [Nat.add_comm]
+    sorry
+
+
+
+
+
+
+    -- linarith
+
+private theorem sizeOfReverseSame {l : List Py.Expr} : sizeOf l = sizeOf l.reverse := by
+  induction l
+  case nil => simp
+  case cons hd tl ih => simp; rw [ih]; apply sizeOfIncForSimpleAppend
+
+-- mutual
+def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   match e with
   | .int n =>
-    if n >= 0 then return quote (Int.toNat n)
-    else `(- $(quote (Int.toNat (-n))))
+    if n >= 0 then return quote $ Int.toNat n
+    else `(- $(quote $ Int.toNat (-n)))
   | .float n => return Syntax.mkScientificLit (toString n)
   | .neg arg => `((-$(<- expr arg)))
   | .var v => return mkIdent v
   | .add left right => `(($(<- expr left) + $(<- expr right)))
   | .matmul left right => `(($(<- expr left) @ $(<- expr right)))
   | .call (.var n) args =>
+    have termination : 1 + sizeOf n + sizeOf args.reverse < 1 + (1 + sizeOf n) + sizeOf args := by
+      sorry
+      -- Some weird bug here
+
+      -- conv => rhs; rw [Nat.add_assoc]
+      -- conv => lhs; rw [Nat.add_assoc]
+      -- apply Nat.add_lt_add_left
+      -- conv =>
+      --   pattern 1 + sizeOf n
+      --   rw [Nat.add_comm]
+      -- conv => rhs; rw [Nat.add_assoc]
+      -- apply Nat.add_lt_add_left
+      -- have {x y} : x = y -> x < 1 + y := by
+      --   intro h
+      --   rw [h]
+      --   simp
+      -- apply this
+      -- symm
+      -- -- exact sizeOfReverseSame (l := args)
+
+      -- have : (
+      --   @sizeOf (List Py.Expr) (@List._sizeOf_inst Py.Expr (instSizeOf Py.Expr)) args = sizeOf args.reverse ->
+      --   @sizeOf (List Py.Expr) (@List._sizeOf_inst Py.Expr Py.Expr._sizeOf_inst) args = sizeOf args.reverse
+      -- ) := by intro h; assumption
+      -- apply this
+      -- have := sizeOfReverseSame (l := args)
+      -- exact this
+
+
+
+
+      -- conv in sizeOf args.reverse => rw [<- this]
+
     if isPrimOp n then `($(<- fncall (.var n) args.reverse) (by resolvePrimOp))
     else fncall (.var n) args.reverse
-  | .call fn args => fncall fn args.reverse
+  | .call fn args =>
+    have termination : sizeOf fn + sizeOf args.reverse < 1 + sizeOf fn + sizeOf args := by sorry
+    fncall fn args.reverse
+  termination_by sizeOf e
 
-partial def fncall (fn : Py.Expr) (args : List Py.Expr) : CommandElabM (TSyntax `term) := do
+where fncall (fn : Py.Expr) (args : List Py.Expr) : CommandElabM (TSyntax `term) := do
   match args with
   | [] => expr fn
   | x::xs => `(($(<- fncall fn xs) $(<- expr x)))
-end
+  termination_by sizeOf fn + @sizeOf (List Py.Expr) (@List._sizeOf_inst Py.Expr Py.Expr._sizeOf_inst) args
+-- end
 
 def stmt (s : List Py.Stmt) (r : Py.Expr) : CommandElabM (TSyntax `term) := do
   match s with
@@ -166,8 +266,9 @@ def func : Py.FunDef -> CommandElabM (TSyntax `command) :=
   λ ⟨n, p, b, r, rt⟩ => do
   let params := if p.length > 0 then p.toArray.map Prod.fst |>.map mkIdent else #[mkIdent `_]
 
-  `(def $(mkIdent n) : $(<- type (p.map Prod.snd) rt) := λ $(params)* =>
+  `(command| def $(mkIdent n) : $(<- type (p.map Prod.snd) rt) := λ $(params)* =>
     $(<- stmt b r))
+
   where
     type (ps : List Py.Typ) (rt : Py.Typ) : CommandElabM (TSyntax `term) := do
       if ps.length == 0 then
@@ -189,5 +290,5 @@ syntax (name := pyFuncCmd) "#pyFunc" term : command
     -- let f : Format <- liftCoreM $ PrettyPrinter.ppCommand cmd
     -- dbg_trace s!"{f}"
     elabCommand cmd
-    liftTermElabM $ Tactic.TryThis.addSuggestion cmd.raw {suggestion := .tsyntax cmd}
+    liftTermElabM $ TryThis.addSuggestion cmd.raw {suggestion := .tsyntax cmd}
   | _ => throwUnsupportedSyntax

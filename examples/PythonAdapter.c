@@ -57,6 +57,8 @@ void printTree (BTNode* node) {
 
 Opt proc() {
     printf("Entering proc\n");
+    printf("Strange alterationqua\n");
+    printf("Hello\n");
     Py_Initialize();
 
     PyObject* pModule1 = PyImport_Import(PyUnicode_FromString("sys"));
@@ -106,4 +108,3 @@ Opt proc() {
 
 int hw() { return 1; }
 Opt hw2() { return None; }
-

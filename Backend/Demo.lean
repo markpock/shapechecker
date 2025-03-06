@@ -1,4 +1,5 @@
-import Backend.DemoBase
+import Backend.Basic
+import Backend.Elaborator
 
 /-
 def exa(a : int, b : int) -> int:
@@ -7,12 +8,12 @@ def exa(a : int, b : int) -> int:
   return x
 -/
 def exampleFunction : Py.FunDef := {
-  name := `exa
+  name   := `exa
   params := [
     (`a, .float),
     (`b, .float)
   ]
-  body := [
+  body   := [
     .assign `x $ .var `a,
     .assign `y $ .add (.var `x) (.int 1)
   ]
@@ -25,24 +26,24 @@ def tensorAddN(a : Tensor (l), b : Tensor (l)) -> Tensor (l):
   return a + b
 -/
 def tensorAdd : Py.FunDef := {
-  name := `tensorAddN
+  name   := `tensorAddN
   params := [
     (`a, .tensor (.var `l)),
     (`b, .tensor (.var `l))
   ]
-  body := []
+  body   := []
   retval := .add (.var `a) (.var `b)
   rettyp := .tensor (.var `l)
 }
 
 def tensorAddAltered : Py.FunDef := {
-  name := `tensorAddAlteration
+  name   := `tensorAddAlteration
   params := [
     (`a, .tensor (.var `l)),
     (`b, .tensor (.var `l))
   ]
-  body := []
-  retval := .call (.var `tensorAddPrimOp) [(.var `a), (.var `b)]
+  body   := []
+  retval := .call (.var `tensorAddPrimOp) [.var `a, .var `b]
   rettyp := .tensor (.var `l)
 }
 
@@ -51,17 +52,19 @@ def tensorMatMul(
   a : Tensor ([2] + [3, 4]),
   b : Tensor ([2] + [4, 5])
 ) -> Tensor ([2] + [3, 5]):
-  return a @ b
+  c = a + b
+  d = c + a
+  return a @ d
 -/
 def tensorMatMulAltered : Py.FunDef := {
-  name := `tensorMatMulAlteration
+  name   := `tensorMatMulAlteration
   params := [
-    (`a, .tensor ((2 ::: ∅) ++ (3 ::: 4 ::: ∅))),
-    (`b, .tensor ((2 ::: ∅) ++ (4 ::: 5 ::: ∅)))
+    (`a, .tensor (.append (.cons 2 .nil) (.cons 3 $ .cons 4 .nil))),
+    (`b, .tensor (.append (.cons 2 .nil) (.cons 4 $ .cons 5 .nil)))
   ]
-  body := []
-  retval := .call (.var `tensorMatMulPrimOp) [(.var `a), (.var `b)]
-  rettyp := .tensor ((2 ::: ∅) ++ (3 ::: 5 ::: ∅))
+  body   := [
+    Py.Stmt.assign `c (Py.Expr.add (Py.Expr.var `a) (Py.Expr.var `b))
+  ]
+  retval := .call (.var `tensorMatMulPrimOp) [.var `a, .var `b]
+  rettyp := .tensor (.append (.cons 2 .nil) (.cons 3 $ .cons 5 .nil))
 }
-
-#pyFunc tensorMatMulAltered
