@@ -39,6 +39,8 @@ inductive Expr :=
 inductive Stmt :=
   | assign : Name -> Expr -> Stmt
 
+  | for : Name -> Expr -> List Stmt -> Stmt -> Stmt -- Require that the statement list be nonempty.
+
 -- Consider functions to have a canonical form with one return only.
 structure FunDef :=
   name : Name

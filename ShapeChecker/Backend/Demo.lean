@@ -15,11 +15,22 @@ def exampleFunction : Py.FunDef := {
   ]
   body   := [
     .assign `x $ .var `a,
-    .assign `y $ .add (.var `x) (.int 1)
+    .assign `y $ .add (.var `x) (.int 1),
+    .for `z (.list [.int 1, .int 2, .int 3]) [] (.assign `x $ .add (.var `x) (.var `z))
   ]
   retval := .var `x
-  rettyp := .int
+  rettyp := .float
 }
+
+#pyFunc exampleFunction
+
+
+-- def exa : Float -> Float -> Int := λ a b => Id.run do
+--   let x := a
+--   let y := (x + 1)
+--   for z in List.cons 1 (List.cons 2 (List.cons 3 (List.nil)))do
+--     let x := (x + z)
+--   return x
 
 /-
 def tensorAddN(a : Tensor (l), b : Tensor (l)) -> Tensor (l):
