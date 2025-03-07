@@ -1,5 +1,0 @@
-{"log":
- [{"message":
-   ".> /Users/markpock/.elan/toolchains/leanprover--lean4---v4.13.0/bin/leanc -shared -o ././.build/libpython_adapter.dylib -Wl,-force_load,././.build/libpython_adapter.a",
-   "level": "trace"}],
- "depHash": "15722689530693893386"}
