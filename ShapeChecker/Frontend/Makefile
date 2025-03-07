@@ -8,34 +8,37 @@ PYTHON_PREFIX = /opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versio
 PYTHON_INCLUDES = -I$(PYTHON_PREFIX)/include/python$(PYTHON_VERSION)
 PYTHON_LIBS = $(PYTHON_PREFIX)/lib/libpython$(PYTHON_VERSION).dylib
 
+# Build directory
+BUILD_DIR = ../../.build
+
 # Library name
-LIBRARY_NAME = libpython_adapter.a
-EXEC_NAME = python_adapter_exec
+LIBRARY_NAME = $(BUILD_DIR)/libpython_adapter.a
+DYLLIBRARY_NAME = $(BUILD_DIR)/libpython_adapter.dylib
+EXEC_NAME = $(BUILD_DIR)/python_adapter_exec
 
 # Source files
 PYTHON_ADAPTER_SRC = PythonAdapter.c
 
 # Object files
-PYTHON_ADAPTER_OBJ = $(PYTHON_ADAPTER_SRC:.c=.o)
+PYTHON_ADAPTER_OBJ = $(BUILD_DIR)/$(PYTHON_ADAPTER_SRC:.c=.o)
+
+# Ensure build directory exists
+$(shell mkdir -p $(BUILD_DIR))
 
 # All targets
-all: $(LIBRARY_NAME) #$(EXEC_NAME)
+all: $(LIBRARY_NAME)
 
 # Rule for building the static library
 $(LIBRARY_NAME): $(PYTHON_ADAPTER_OBJ)
 	ar rcs $@ $^ $(PYTHON_LIBS)
 
-# Rule for building the executable
-# $(EXEC_NAME): $(PYTHON_ADAPTER_OBJ)
-# 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) $^ $(PYTHON_LIBS) -o $@
-
 # Rule for building object files
-%.o: %.c
+$(BUILD_DIR)/%.o: %.c
 	$(CC) $(CFLAGS) $(PYTHON_INCLUDES) -c $< -o $@
 
 # Clean target
 clean:
-	rm -f $(LIBRARY_NAME) $(PYTHON_ADAPTER_OBJ) $(EXEC_NAME)
+	rm -f $(LIBRARY_NAME) $(PYTHON_ADAPTER_OBJ) $(EXEC_NAME) $(DYLLIBRARY_NAME) $(DYLLIBRARY_NAME).*
 
 # Debug target (builds with debug symbols)
 debug: CFLAGS += -g -DDEBUG
@@ -49,7 +52,7 @@ docs:
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  all       - Build the static library and executable (default)"
+	@echo "  all       - Build the static library (default)"
 	@echo "  clean     - Remove all built files"
 	@echo "  debug     - Build with debug symbols"
 	@echo "  docs      - Generate documentation"
