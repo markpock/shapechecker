@@ -1,7 +1,82 @@
 # shapechecker
 
-
 This project explores a novel approach to static shape checking of tensor operations in PyTorch programs. By transpiling PyTorch code into the dependently typed language Lean 4, we leverage its typechecker to verify shape correctness at compile-time. This project aims to eliminate common runtime tensor shape errors, enhancing debugging and developer productivity for machine learning and scientific computing.
+
+
+### End to End Example of Our Pipeline 
+
+
+```
+def m(a: Tensor(3,4), b: Tensor(4,5)) -> Tensor(3,5):
+    return a @ b
+```
+
+This is converted to an AST
+```
+Function(
+    name = m
+    arguments = [
+        (name = a,
+        annotator = 'Tensor(3,4)',
+        positional = True),
+        ...
+    ], 
+    body = ('RETURN, expression = (variable a) @ (variable b)) 
+)
+```
+
+This AST is then accessed in C: 
+
+Goal: Creating typed objects to represent this AST so that it could be read in to Lean as an inductive types (which we need to represent in C as Tagged Expressions). 
+
+Read into C
+```c
+PyObject *p -> contains body, arguments, name 
+
+```
+
+Opt
+
+Create TaggedExpr
+```c
+typedef struct taggedUExpr {
+  int tag;
+  union uExpr {
+    int i;
+    char* var;
+    struct taggedUExpr* neg;
+    struct eAdd {
+      struct taggedUExpr* left;
+      struct taggedUExpr* right;
+    } a;
+  } u;
+} TaggedExpr;
+```
+
+
+Create traverse_expr turns taggedUExpr to a Lean object.
+
+
+exprToC: (PyObject *value)
+
+
+
+What is the ultimate output that we want? 
+= A Lean Object given the values we define in Python 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ### Introduction
@@ -32,7 +107,14 @@ Follow the instructions on the Lean 4 installation guide.
 
 
 ### Usage: 
-TBD~
+
+
+```
+lake exe ShapeCheckerExe
+<!-- compile the Lean code in your project into an executable format. This allows you to run Lean programs directly from the command line. -->
+```
+
+~TBD
 
 
 ### Roadmap
@@ -43,6 +125,9 @@ TBD~
 5.	Benchmarking: Test on real-world PyTorch programs from GitHub to evaluate effectiveness and performance.
 
 
+
+
+
 ### Acknowledgments
 
 This project draws inspiration from prior work, including:
@@ -50,3 +135,4 @@ This project draws inspiration from prior work, including:
 - [Ezyang’s Blog: A Compile-Time Debugger for Tensor Shape Checks]([url](http://blog.ezyang.com/2018/04/a-compile-time-debugger-that-helps-you-write-tensor-shape-checks/))
 
 Special thanks to the Lean and PyTorch communities for their tools and resources.
+
