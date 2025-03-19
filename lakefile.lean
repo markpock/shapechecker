@@ -7,8 +7,9 @@ package "ShapeChecker" where
   ]
 
 require "leanprover-community" / "batteries" @ "git#v4.13.0"
+require "leanprover-community" / "mathlib" @ "git#v4.13.0"
 require alloy from git "https://github.com/tydeu/lean4-alloy.git"
-require Parser from git "https://github.com/fgdorais/lean4-parser"
+require Parser from git "https://github.com/fgdorais/lean4-parser" @ "main"
 
 module_data alloy.c.o.export : BuildJob System.FilePath
 module_data alloy.c.o.noexport : BuildJob System.FilePath

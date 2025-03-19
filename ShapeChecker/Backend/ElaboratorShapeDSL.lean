@@ -8,6 +8,13 @@ open Lean Elab Command Term Meta Tactic
 
 namespace ElabPy
 
+#check MonadExcept
+#check Except
+#check Option
+
+#check Except
+
+
 def safeSubtraction (a b : Nat) : Except String Nat := do
   if b > a then throw "B was greater than a, aborting"
   else return a - b

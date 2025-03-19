@@ -1,4 +1,5 @@
 import Lean
+import ShapeChecker.Backend.Tensors
 
 open Lean Tactic
 
