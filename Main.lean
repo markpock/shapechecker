@@ -12,12 +12,13 @@ def Tree.toString : Tree -> String
 
 instance : ToString (Tree) := ⟨Tree.toString⟩
 
-inductive Expr where
-  | int : Int → Expr
-  | float : Float → Expr
-  | neg : Expr → Expr
-  | var : String → Expr
-deriving Repr
+#check Expr
+-- inductive Expr where
+--   | int : Int → Expr
+--   | float : Float → Expr
+--   | neg : Expr → Expr
+--   | var : String → Expr
+-- deriving Repr
 
 def Expr.toString : Expr → String
   | .int n => s!"{n}"
