@@ -1,0 +1,10 @@
+name = "shapechecker"
+version = "0.1.0"
+defaultTargets = ["shapechecker"]
+
+[[lean_lib]]
+name = "shapechecker"
+
+[[lean_exe]]
+name = "shapechecker"
+root = "Main"

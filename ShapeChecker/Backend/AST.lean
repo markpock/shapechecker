@@ -15,7 +15,6 @@ inductive Expr :=
   -- Constants
   | int (n : Int)
   | float (f : Float)
-
   | list (l : List Expr)
 
   -- The tensor constants
@@ -38,7 +37,6 @@ inductive Expr :=
 -- TODO: Add some more statements
 inductive Stmt :=
   | assign : Name -> Expr -> Stmt
-
   | for : Name -> Expr -> List Stmt -> Stmt -> Stmt -- Require that the statement list be nonempty.
 
 -- Consider functions to have a canonical form with one return only.
@@ -51,4 +49,14 @@ structure FunDef :=
 
 def Program := List FunDef
 
-end Py
+def Py.Typ.toString : Typ → String
+  | .int => "Int"
+  | .float => "Float"
+  | .list t => s!"List({t.toString})"
+  | .tensor annot => s!"Tensor({annot})"
+
+instance : ToString Py.Typ := ⟨Py.Typ.toString⟩
+
+def Py.FunDef.toString : Py.FunDef → String
+  | .funDef name body inputAnn outputAnn =>
+    s!"function {name}() {\n  return {body.toString}\n}\nInput Types: {inputAnn}\nOutput Type: {outputAnn}"

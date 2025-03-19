@@ -1,178 +1,168 @@
 import Alloy.C
 
 open scoped Alloy.C
-
-alloy c include <lean/lean.h>
-alloy c include "stdio.h" "stdbool.h"
-alloy c section
-
-typedef struct binary_tree_node_s {
-  int data;
-  struct binary_tree_node_s *left, *right;
-} BTNode;
-
-typedef struct opt {
-  bool safe;
-  BTNode* ptr;
-} Opt;
-
--- extern int hw();
--- extern Opt hw2();
-extern Opt proc();
-
-end
-
-alloy c opaque_extern_type S => BTNode where
-  -- foreach(s, f) := lean_inc(f); lean_apply_1(f, s->m_s)
-  toLean => "CFoo_to_lean"
-  ofLean => "of_LeanFoo"
-  hw => "sad"
-  finalize(s) := free(s)
-
-alloy c section
-
-lean_object* traverse(BTNode* ptr) {
-  if (ptr == NULL) {
-    return lean_box(0);
-  } else {
-    lean_object * lo = lean_alloc_ctor(1, 3, 8 * 3);
-    lean_ctor_set(lo, 0, lean_box(ptr->data));
-    lean_ctor_set(lo, 1, traverse(ptr->left));
-    lean_ctor_set(lo, 2, traverse(ptr->right));
-    return lo;
-  }
-}
-
-end
-
--- alloy c opaque_extern_type COpt => Opt where
---   toLean => "COpt_to_lean"
---   ofLean => "of_lean_COpt"
---   is_safe(s) := if (s.safe) {
---     return true
---   } else {
---     return false
---   }
---   finalize(s) := {}
-
-
--- Simplified Expr definition with basic types
 open Lean (Name)
+
+-- Core Lean definitions
 inductive Expr :=
   | int (n : Int)
   | var (v : Name)
   | neg (arg : Expr)
   | add (left right : Expr)
+  | matMult (left right : Expr)
+  | tensor (dim1 dim2 : Expr)
+  deriving Repr
 
 instance : Inhabited Expr := ⟨.int 0⟩
 
-alloy c section
-typedef struct taggedUExpr {
-  int tag;
-  union uExpr {
-    int i;
-    char* var;
-    struct taggedUExpr* neg;
-    struct eAdd {
-      struct taggedUExpr* left;
-      struct taggedUExpr* right;
-    } a;
-  } u;
-} TaggedExpr;
+inductive Stmt :=
+  | assign (name : Name) (value : Expr)
+  | ret (value : Expr)
+  deriving Repr
 
-typedef struct expr_opt {
-  bool safe;
-  TaggedExpr* ptr;
-} ExprOpt;
+instance : Inhabited Stmt := ⟨.ret (.int 0)⟩
 
-extern ExprOpt proc_expr();
+namespace Py
+  structure Annotations where
+    inputA : String
+    inputB : String
+    output : String
+    deriving Repr
 
-// Expression type constants
-#define EXPR_INT    0
-#define EXPR_VAR    1
-#define EXPR_NEG    2
-#define EXPR_ADD    3
-end
+  structure FunDef where
+    name : String
+    body : List Stmt
+    inputAnnotations : String
+    outputAnnotation : String
+    deriving Repr
+end Py
 
-alloy c section
-lean_object* traverse_expr(TaggedExpr* ptr) {
-  if (ptr == NULL) {
-    return lean_box(0);
-  } else {
-    lean_object* result;
+@[extern "c_process_function"]
+opaque process_function : Unit → Option Py.FunDef
 
-    switch (ptr->tag) {
-      case EXPR_INT: {
-        result = lean_alloc_ctor(0, 1, 8);
-        lean_ctor_set(result, 0, lean_box(ptr->u.i));
-        break;
+-- C bindings module
+namespace PythonBindings
+  alloy c include <lean/lean.h>
+  alloy c include "stdio.h" "stdbool.h"
+  alloy c section
+  -- Constants
+  #define EXPR_INT    0
+  #define EXPR_VAR    1
+  #define EXPR_NEG    2
+  #define EXPR_ADD    3
+  #define EXPR_MATMULT 4
+  #define EXPR_TENSOR  5
+
+  #define STMT_ASSIGN  0
+  #define STMT_RETURN  1
+
+  -- Forward declarations
+  struct taggedUExpr;
+  struct taggedUStmt;
+  struct CParameter;
+  struct CFunction;
+  struct function_opt;
+
+  -- Type definitions
+  typedef struct taggedUExpr TaggedExpr;
+  typedef struct taggedUStmt TaggedStmt;
+  typedef struct function_opt FunctionOpt;
+  typedef struct CParameter CParameter;
+  typedef struct CFunction CFunction;
+
+  -- Struct definitions
+  struct taggedUExpr {
+    int tag;
+    union {
+      int i;
+      char* var;
+      TaggedExpr* neg;
+      struct {
+        TaggedExpr* left;
+        TaggedExpr* right;
+      } a;
+      struct {
+        TaggedExpr* left;
+        TaggedExpr* right;
+      } matMult;
+      struct {
+        TaggedExpr* dim1;
+        TaggedExpr* dim2;
+      } tensor;
+    } u;
+  };
+
+  struct taggedUStmt {
+    int tag;
+    union {
+      struct {
+        char* name;
+        TaggedExpr* value;
+      } assign;
+      struct {
+        TaggedExpr* value;
+      } ret;
+    } u;
+  };
+
+  struct CParameter {
+    char* name;
+    TaggedExpr* type;
+  };
+
+  struct CFunction {
+    char* name;
+    CParameter* params;
+    int param_count;
+    TaggedExpr* return_type;
+    TaggedStmt** body;         // Array of statements
+    int body_count;            // Count of statements
+    struct {
+      char* input_a;
+      char* input_b;
+      char* output;
+    } annotations;
+  };
+
+  struct function_opt {
+    bool safe;
+    void* ptr;
+  };
+
+  -- Function declarations
+  extern FunctionOpt proc_function();
+  extern lean_object* traverse_expr(TaggedExpr* ptr);
+  extern lean_object* traverse_stmt(TaggedStmt* ptr);
+  extern lean_object* traverse_stmt_list(TaggedStmt** stmts, size_t count);
+  extern lean_object* lean_traverse_function(void* ptr);
+
+  lean_object* process_function(lean_object* unit) {
+    printf("DEBUG: Starting process_function\n");
+    FunctionOpt o = proc_function();
+
+    if (!o.safe) {
+      printf("Unsafe function\n");
+      lean_object* none = lean_box(0);
+      lean_inc_ref(none);  // Increment reference count for none
+      return none;
+    } else {
+      printf("Safe function\n");
+      lean_object* ob = lean_alloc_ctor(1, 1, 8);
+      lean_inc_ref(ob);  // Increment reference count for option constructor
+      printf("DEBUG: Created option constructor\n");
+      lean_object* func = lean_traverse_function(o.ptr);
+      if (func == lean_box(0)) {
+        printf("ERROR: Failed to traverse function\n");
+        lean_dec_ref(ob);
+        lean_object* none = lean_box(0);
+        lean_inc_ref(none);
+        return none;
       }
-      case EXPR_VAR: {
-        printf("DEBUG: In traverse_expr, handling EXPR_VAR with value: %s\n", ptr->u.var ? ptr->u.var : "NULL");
-        result = lean_alloc_ctor(1, 1, 8);
-        // Create a string first
-        lean_object* str = lean_mk_string(ptr->u.var ? ptr->u.var : "");
-        // Then create a Name.anonymous constructor
-        lean_object* name = lean_alloc_ctor(0, 0, 0);
-        // Then create a Name.str constructor with the anonymous name and the string
-        lean_object* name_str = lean_alloc_ctor(1, 2, 0);
-        lean_ctor_set(name_str, 0, name);
-        lean_ctor_set(name_str, 1, str);
-        lean_ctor_set(result, 0, name_str);
-        break;
-      }
-      case EXPR_NEG: {
-        printf("DEBUG: In traverse_expr, handling EXPR_NEG\n");
-        result = lean_alloc_ctor(2, 1, 8);
-        lean_ctor_set(result, 0, traverse_expr(ptr->u.neg));
-        break;
-      }
-      case EXPR_ADD: {
-        printf("DEBUG: In traverse_expr, handling EXPR_ADD\n");
-        result = lean_alloc_ctor(3, 2, 16);
-        lean_ctor_set(result, 0, traverse_expr(ptr->u.a.left));
-        lean_ctor_set(result, 1, traverse_expr(ptr->u.a.right));
-        break;
-      }
-      default: {
-        result = lean_alloc_ctor(0, 1, 8);
-        lean_ctor_set(result, 0, lean_box(0));
-      }
+      printf("DEBUG: Created Lean function\n");
+      lean_ctor_set(ob, 0, func);
+      printf("DEBUG: Set option value\n");
+      return ob;
     }
-    return result;
   }
-}
-end
-
-alloy c extern "process_expr" def process_expr (a : Unit) : Option Expr := {
-  ExprOpt o = proc_expr();
-
-  if (!o.safe) {
-    printf("Unsafe object\n");
-    return lean_box(0);
-  } else {
-    printf("Safe object with tag: %d\n", o.ptr->tag);
-    lean_object * ob = lean_alloc_ctor(1, 1, 8);
-    lean_object * expr = traverse_expr(o.ptr);
-    printf("DEBUG: Created Lean expression\n");
-    lean_ctor_set(ob, 0, expr);
-    return ob;
-  }
-}
-
-inductive Tree :=
-  | nil
-  | branch (d : Int) (l r : Tree)
-
-instance : Inhabited Tree := ⟨.nil⟩
-
-alloy c extern "ct" def ct (a : Unit) : Option Tree := {
-  Opt o = proc();
-  if (!o.safe) {
-    return lean_box(0);
-  } else {
-    lean_object * ob = lean_alloc_ctor(1, 1, 8);
-    lean_ctor_set(ob, 0, traverse(o.ptr));
-    return ob;
-  }
-}
+  end
+end PythonBindings
