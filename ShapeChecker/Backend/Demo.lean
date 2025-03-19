@@ -14,16 +14,24 @@ def exampleFunction : Py.FunDef := {
     (`b, .float)
   ]
   body   := [
-    .assign `x $ .var `a,
-    .assign `y $ .add (.var `x) (.int 1),
-    .for `z (.list [.int 1, .int 2, .int 3]) [] (.assign `x $ .add (.var `x) (.var `z))
+    .declare `x $ .var `a,
+    .declare `y $ .add (.var `x) (.int 1),
+    .for `z (.list [.int 1, .int 2, .int 3]) [] $ .mutate `x $ .add (.var `x) (.var `z),
+    .declare `t $ .zeros $ .cons 100 $ .cons 100 $ .nil
   ]
-  retval := .var `x
+  retval := .add (.var `x) $ .add (.var `y) (.var `b)
   rettyp := .float
 }
 
-#pyFunc exampleFunction
-
+def exa : Float -> Float -> Float := λ a b =>
+  Id.run
+    (do
+      let mut x := a
+      let mut y := (x + 1)
+      for z in List.cons 1 (List.cons 2 (List.cons 3 (List.nil)))do
+        x := (x + z)
+      let mut t := Tensor.of (Py.Shape.cons 100 (Py.Shape.cons 100 Py.Shape.nil))
+      return ((x + y) + b))
 
 -- def exa : Float -> Float -> Int := λ a b => Id.run do
 --   let x := a
@@ -74,7 +82,7 @@ def tensorMatMulAltered : Py.FunDef := {
     (`b, .tensor (.append (.cons 2 .nil) (.cons 4 $ .cons 5 .nil)))
   ]
   body   := [
-    Py.Stmt.assign `c (Py.Expr.add (Py.Expr.var `a) (Py.Expr.var `b))
+    Py.Stmt.declare `c (Py.Expr.add (Py.Expr.var `a) (Py.Expr.var `b))
   ]
   retval := .call (.var `tensorMatMulPrimOp) [.var `a, .var `b]
   rettyp := .tensor (.append (.cons 2 .nil) (.cons 3 $ .cons 5 .nil))

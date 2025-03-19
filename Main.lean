@@ -16,6 +16,15 @@ def Tree.toString : Tree -> String
     s!"{data}, \{{x}} \{{y}}"
 
 instance : ToString Tree := ⟨Tree.toString⟩
+instance : ToString (Tree) := ⟨Tree.toString⟩
+
+#check Expr
+-- inductive Expr where
+--   | int : Int → Expr
+--   | float : Float → Expr
+--   | neg : Expr → Expr
+--   | var : String → Expr
+-- deriving Repr
 
 -- Expression toString handler
 def Expr.toString : Expr → String

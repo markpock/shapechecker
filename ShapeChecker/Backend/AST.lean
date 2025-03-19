@@ -34,18 +34,47 @@ inductive Expr :=
   | var (v : Name)
   | call (fn : Expr) (args : List Expr)
 
+inductive StmtIn :=
+  | assign : Name -> Expr -> StmtIn
+  | for : Name -> Expr -> List StmtIn -> StmtIn -> StmtIn -- Require that the statement list be nonempty.
+
 -- TODO: Add some more statements
 inductive Stmt :=
   | assign : Name -> Expr -> Stmt
   | for : Name -> Expr -> List Stmt -> Stmt -> Stmt -- Require that the statement list be nonempty.
 
--- Consider functions to have a canonical form with one return only.
+structure FunDefIn :=
+  name : Name
+  params : List (Name × Typ)
+  body : List StmtIn
+  retval : Expr
+  rettyp : Typ
+
 structure FunDef :=
   name : Name
   params : List (Name × Typ)
   body : List Stmt
   retval : Expr
   rettyp : Typ
+
+instance : Inhabited Stmt := ⟨.declare .anonymous $ .int 0⟩
+
+partial def FunDefIn.toFunDef (f : FunDefIn) : FunDef :=
+  { f with body := disambiguate f.body [] }
+where disambiguate (s : List StmtIn) (Γ : List Name) :=
+  match s with
+  | [] => []
+  | .assign n e ::xs =>
+    if Γ.contains n then .mutate n e :: disambiguate xs Γ
+    else .declare n e :: disambiguate xs (n :: Γ)
+  | .for n e l s ::xs =>
+    let re := disambiguate (l ++ [s]) Γ
+    let x := re.take $ re.length - 1
+    let y := (re.drop $ re.length - 1) |>.get! 0
+    .for n e x y :: disambiguate xs Γ
+
+-- Consider functions to have a canonical form with one return only.
+
 
 def Program := List FunDef
 

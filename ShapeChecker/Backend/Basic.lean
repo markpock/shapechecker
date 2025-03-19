@@ -5,13 +5,13 @@ open Lean
 namespace Py
 
 inductive ShapeData :=
-  | wildcard
+  -- | wildcard
   | var (x : Name)
   | const (n : Nat)
 
 inductive Shape :=
   | nil
-  | wildcard
+  -- | wildcard
   | var (x : Name)
   | cons (data : ShapeData) (rest : Shape)
   | append (op1 op2 : Shape)
