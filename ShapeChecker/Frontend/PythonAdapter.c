@@ -14,34 +14,32 @@ typedef struct opt
     BTNode *ptr;
 } Opt;
 
-// Expr structures
-typedef struct expr_node_s
+// Expression structure using tagged union
+typedef struct taggedUExpr
 {
-    int integer;
-    double float_val;
-    struct expr_node_s *neg;
-    char *var;
-    // Additional fields for other expr types can be added here
-    struct expr_node_s *left;  // For add and matmul
-    struct expr_node_s *right; // For add and matmul
-    int expr_type;             // To track which type of expr this is
-    char *fn_name;             // For function calls
-    struct expr_node_s **args; // For function call arguments
-    int arg_count;             // Number of arguments
-} ExprNode;
+    int tag;
+    union uExpr
+    {
+        int i;
+        char *var;
+        struct taggedUExpr *neg;
+        struct eAdd
+        {
+            struct taggedUExpr *left;
+            struct taggedUExpr *right;
+        } a;
+    } u;
+} TaggedExpr;
 
 #define EXPR_INT 0
-#define EXPR_FLOAT 1
+#define EXPR_VAR 1
 #define EXPR_NEG 2
-#define EXPR_VAR 3
-
-#define None ((Opt){false, NULL})
-#define Some(x) ((Opt){true, x})
+#define EXPR_ADD 3
 
 typedef struct expr_opt
 {
     bool safe;
-    ExprNode *ptr;
+    TaggedExpr *ptr;
 } ExprOpt;
 
 #define None ((Opt){false, NULL})
@@ -113,47 +111,37 @@ ExprOpt exprToC(PyObject *value)
     }
 
     // Allocate a new expression node
-    ExprNode *result = malloc(sizeof(ExprNode));
+    TaggedExpr *result = malloc(sizeof(TaggedExpr));
     if (result == NULL)
     {
         fprintf(stderr, "Memory allocation failed\n");
         return ExprNone;
     }
 
-    // Initialize all fields to zero/NULL
-    result->integer = 0;
-    result->float_val = 0.0;
-    result->neg = NULL;
-    result->var = NULL;
-    result->expr_type = EXPR_INT; // Default type
-
     // Try to get integer field
     PyObject *integer = PyObject_GetAttrString(value, "integer");
     if (integer && PyLong_Check(integer))
     {
-        result->integer = PyLong_AsLong(integer);
-        result->expr_type = EXPR_INT;
+        result->tag = EXPR_INT;
+        result->u.i = PyLong_AsLong(integer);
+        Py_XDECREF(integer);
+        return ExprSome(result);
     }
     Py_XDECREF(integer);
-
-    // Try to get float field
-    PyObject *float_val = PyObject_GetAttrString(value, "float");
-    if (float_val && PyFloat_Check(float_val))
-    {
-        result->float_val = PyFloat_AsDouble(float_val);
-        result->expr_type = EXPR_FLOAT;
-    }
-    Py_XDECREF(float_val);
 
     // Try to get var field
     PyObject *var = PyObject_GetAttrString(value, "var");
     if (var && PyUnicode_Check(var))
     {
         const char *var_str = PyUnicode_AsUTF8(var);
+        printf("DEBUG: Found var field with value: %s\n", var_str ? var_str : "NULL");
         if (var_str && strlen(var_str) > 0)
         {
-            result->var = strdup_safe(var_str);
-            result->expr_type = EXPR_VAR;
+            result->tag = EXPR_VAR;
+            result->u.var = strdup_safe(var_str);
+            printf("DEBUG: Created variable expression with tag %d and value %s\n", result->tag, result->u.var);
+            Py_XDECREF(var);
+            return ExprSome(result);
         }
     }
     Py_XDECREF(var);
@@ -162,23 +150,59 @@ ExprOpt exprToC(PyObject *value)
     PyObject *neg = PyObject_GetAttrString(value, "neg");
     if (neg && !Py_Is(neg, Py_None))
     {
+        printf("DEBUG: Found neg field\n");
         ExprOpt neg_opt = exprToC(neg);
         if (neg_opt.safe)
         {
-            result->neg = neg_opt.ptr;
-            result->expr_type = EXPR_NEG;
-        }
-        else
-        {
-            // If we can't convert the negation, free the current node and return error
-            free(result);
+            result->tag = EXPR_NEG;
+            result->u.neg = neg_opt.ptr;
+            printf("DEBUG: Created negation expression with tag %d\n", result->tag);
             Py_XDECREF(neg);
-            return ExprNone;
+            return ExprSome(result);
         }
+        free(result);
+        Py_XDECREF(neg);
+        return ExprNone;
     }
     Py_XDECREF(neg);
 
-    return ExprSome(result);
+    // Try to get left and right fields for addition
+    PyObject *left = PyObject_GetAttrString(value, "left");
+    PyObject *right = PyObject_GetAttrString(value, "right");
+    if (left && right && !Py_Is(left, Py_None) && !Py_Is(right, Py_None))
+    {
+        printf("DEBUG: Found left and right fields for addition\n");
+        ExprOpt left_opt = exprToC(left);
+        if (!left_opt.safe)
+        {
+            free(result);
+            Py_XDECREF(left);
+            Py_XDECREF(right);
+            return ExprNone;
+        }
+
+        ExprOpt right_opt = exprToC(right);
+        if (!right_opt.safe)
+        {
+            free(result);
+            Py_XDECREF(left);
+            Py_XDECREF(right);
+            return ExprNone;
+        }
+
+        result->tag = EXPR_ADD;
+        result->u.a.left = left_opt.ptr;
+        result->u.a.right = right_opt.ptr;
+        printf("DEBUG: Created addition expression with tag %d\n", result->tag);
+        Py_XDECREF(left);
+        Py_XDECREF(right);
+        return ExprSome(result);
+    }
+    Py_XDECREF(left);
+    Py_XDECREF(right);
+
+    free(result);
+    return ExprNone;
 }
 
 void printTree(BTNode *node)
@@ -195,7 +219,7 @@ void printTree(BTNode *node)
     printf(" )");
 }
 
-void printExpr(ExprNode *expr)
+void printExpr(TaggedExpr *expr)
 {
     if (expr == NULL)
     {
@@ -203,26 +227,26 @@ void printExpr(ExprNode *expr)
         return;
     }
 
-    switch (expr->expr_type)
+    switch (expr->tag)
     {
     case EXPR_INT:
-        printf("Int(%d)", expr->integer);
+        printf("Int(%d)", expr->u.i);
         break;
-
-    case EXPR_FLOAT:
-        printf("Float(%f)", expr->float_val);
-        break;
-
     case EXPR_VAR:
-        printf("Var(%s)", expr->var ? expr->var : "NULL");
+        printf("Var(%s)", expr->u.var ? expr->u.var : "NULL");
         break;
-
     case EXPR_NEG:
         printf("Neg(");
-        printExpr(expr->neg);
+        printExpr(expr->u.neg);
         printf(")");
         break;
-
+    case EXPR_ADD:
+        printf("(");
+        printExpr(expr->u.a.left);
+        printf(" + ");
+        printExpr(expr->u.a.right);
+        printf(")");
+        break;
     default:
         printf("Unknown expression type");
     }
@@ -236,7 +260,8 @@ Opt proc()
     PyObject *pModule1 = PyImport_Import(PyUnicode_FromString("sys"));
     // PyObject res1 = PyRun_SimpleString("'Hello World'");
 
-    PyRun_SimpleString("import sys; print(sys.argv[0]); sys.path.append('./Backend')");
+    PyRun_SimpleString("import sys; print(sys.argv[0]); sys.path.append('./examples/python-scripts');");
+
     PyObject *pName = PyUnicode_FromString("script");
     /* Error checking of pName left out */
 
@@ -288,7 +313,7 @@ ExprOpt proc_expr()
     printf("Entering proc_expr\n");
     Py_Initialize();
     PyObject *pModule1 = PyImport_Import(PyUnicode_FromString("sys"));
-    PyRun_SimpleString("import sys; print(sys.argv[0]); sys.path.append('./Backend')");
+    PyRun_SimpleString("import sys; print(sys.argv[0]); sys.path.append('./examples/python-scripts')");
     PyObject *pName = PyUnicode_FromString("script");
 
     PyObject *pModule = PyImport_Import(pName);
@@ -300,34 +325,106 @@ ExprOpt proc_expr()
         return ExprNone;
     }
 
-    PyObject *pFunc = PyObject_GetAttrString(pModule, "greet2");
-    if (!pFunc || !PyCallable_Check(pFunc))
+    // First try int expression
+    // PyObject *pFunc = PyObject_GetAttrString(pModule, "make_int_expr");
+    // if (pFunc && PyCallable_Check(pFunc))
+    // {
+    //     PyObject *pValue = PyObject_CallObject(pFunc, NULL);
+    //     if (pValue != NULL)
+    //     {
+    //         ExprOpt o = exprToC(pValue);
+    //         if (o.safe)
+    //         {
+    //             TaggedExpr *expr = o.ptr;
+    //             printf("Expression from Python (int): ");
+    //             printExpr(expr);
+    //             printf("\n");
+    //             return ExprSome(expr);
+    //         }
+    //     }
+    // }
+    // if (PyErr_Occurred())
+    //     PyErr_Clear();
+    // Py_XDECREF(pFunc);
+
+    // Then try var expression
+    // PyObject *pFunc = PyObject_GetAttrString(pModule, "make_var_expr");
+    // if (pFunc && PyCallable_Check(pFunc))
+    // {
+    //     PyObject *pValue = PyObject_CallObject(pFunc, NULL);
+    //     if (pValue != NULL)
+    //     {
+    //         ExprOpt o = exprToC(pValue);
+    //         if (o.safe)
+    //         {
+    //             TaggedExpr *expr = o.ptr;
+    //             printf("Expression from Python (var): ");
+    //             printExpr(expr);
+    //             printf("\n");
+    //             return ExprSome(expr);
+    //         }
+    //     }
+    // }
+    // if (PyErr_Occurred())
+    // {
+    //     PyErr_Print();
+    // }
+    // Py_XDECREF(pFunc);
+    // Py_DECREF(pModule);
+
+    // Then try neg expression
+    // PyObject *pFunc2 = PyObject_GetAttrString(pModule, "make_neg_expr");
+    // if (pFunc2 && PyCallable_Check(pFunc2))
+    // {
+    //     PyObject *pValue = PyObject_CallObject(pFunc2, NULL);
+    //     if (pValue != NULL)
+    //     {
+    //         ExprOpt o = exprToC(pValue);
+    //         if (o.safe)
+    //         {
+    //             TaggedExpr *expr = o.ptr;
+    //             printf("Expression from Python (neg): ");
+    //             printExpr(expr);
+    //             printf("\n");
+    //             return ExprSome(expr);
+    //         }
+    //     }
+    // }
+    // if (PyErr_Occurred())
+    // {
+    //     PyErr_Print();
+    // }
+    // Py_XDECREF(pFunc2);
+    // Py_DECREF(pModule);
+
+    // Then try add expression
+    PyObject *pFunc3 = PyObject_GetAttrString(pModule, "make_add_expr");
+    if (pFunc3 && PyCallable_Check(pFunc3))
     {
-        if (PyErr_Occurred())
-            PyErr_Print();
-        Py_XDECREF(pFunc);
-        Py_DECREF(pModule);
-        Py_Finalize();
-        printf("Failed to find greet2 function\n");
-        return ExprNone;
+        PyObject *pValue = PyObject_CallObject(pFunc3, NULL);
+        if (pValue != NULL)
+        {
+            ExprOpt o = exprToC(pValue);
+            if (o.safe)
+            {
+                TaggedExpr *expr = o.ptr;
+                printf("Expression from Python (add): ");
+                printExpr(expr);
+                printf("\n");
+                return ExprSome(expr);
+            }
+        }
     }
-
-    PyObject *pValue = PyObject_CallObject(pFunc, NULL);
-    if (pValue == NULL)
+    if (PyErr_Occurred())
     {
-        fprintf(stderr, "Call to greet2 failed\n");
-        return ExprNone;
+        PyErr_Print();
     }
+    Py_XDECREF(pFunc3);
+    Py_DECREF(pModule);
 
-    ExprOpt o = exprToC(pValue);
-    if (!o.safe)
-        return ExprNone;
-
-    ExprNode *expr = o.ptr;
-    printf("Expression from Python: ");
-    printExpr(expr);
-    printf("\n");
-    return ExprSome(expr);
+    Py_Finalize();
+    printf("Both expressions failed\n");
+    return ExprNone;
 }
 
 int hw() { return 1; }

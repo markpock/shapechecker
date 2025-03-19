@@ -6,20 +6,16 @@ class Tree:
 
 
 class Expr:
-    def __init__(self, integer: int = 0, _float: float = 0.0, neg: 'Expr' = None, var: str = ""):
+    def __init__(self, integer: int = None, var: str = None, neg: 'Expr' = None, left: 'Expr' = None, right: 'Expr' = None):
         self.integer = integer
-        self.float = _float
-        self.neg = neg
         self.var = var
+        self.neg = neg
+        self.left = left
+        self.right = right
 
-    # Add factory methods to create different expression types
     @classmethod
     def create_int(cls, value: int):
         return cls(integer=value)
-    
-    @classmethod
-    def create_float(cls, value: float):
-        return cls(_float=value)
     
     @classmethod
     def create_var(cls, name: str):
@@ -28,28 +24,28 @@ class Expr:
     @classmethod
     def create_neg(cls, expr):
         return cls(neg=expr)
+    
+    @classmethod
+    def create_add(cls, left, right):
+        return cls(left=left, right=right)
 
 # script.py
 def greet():
     return Tree(3, Tree(2), Tree(1))
 
-def greet2():
+def make_int_expr():
     # Create an integer expression with value 42
+    print("made the int_expr")
     return Expr.create_int(42)
 
-# Additional test functions for other expression types
-def make_float_expr():
-    return Expr.create_float(3.14)
-
 def make_var_expr():
+    print("made the var_Expr")
     return Expr.create_var("x")
 
 def make_neg_expr():
     # Create a negation of integer 5
     return Expr.create_neg(Expr.create_int(5))
 
-def make_complex_expr():
-    # Create a variable expression "y"
-    var_y = Expr.create_var("y")
-    # Create negation of y
-    return Expr.create_neg(var_y)
+def make_add_expr():
+    # Create an addition: 1 + 2
+    return Expr.create_add(Expr.create_int(1), Expr.create_int(2))

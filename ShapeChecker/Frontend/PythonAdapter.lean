@@ -1,11 +1,9 @@
 import Alloy.C
 
-
 open scoped Alloy.C
 
 alloy c include <lean/lean.h>
 alloy c include "stdio.h" "stdbool.h"
-
 alloy c section
 
 typedef struct binary_tree_node_s {
@@ -59,100 +57,108 @@ end
 
 
 -- Simplified Expr definition with basic types
+open Lean (Name)
 inductive Expr :=
   | int (n : Int)
-  | float (f : Float)
-  | neg (arg : Expr)
   | var (v : Name)
+  | neg (arg : Expr)
+  | add (left right : Expr)
 
 instance : Inhabited Expr := ⟨.int 0⟩
 
--- Add to PythonAdapter.lean after the existing C sections
 alloy c section
-typedef struct expr_node_s {
-  int integer;
-  double float_val;
-  struct expr_node_s *neg;
-  char *var;
-  int expr_type;
-} ExprNode;
+typedef struct taggedUExpr {
+  int tag;
+  union uExpr {
+    int i;
+    char* var;
+    struct taggedUExpr* neg;
+    struct eAdd {
+      struct taggedUExpr* left;
+      struct taggedUExpr* right;
+    } a;
+  } u;
+} TaggedExpr;
 
 typedef struct expr_opt {
   bool safe;
-  ExprNode* ptr;
+  TaggedExpr* ptr;
 } ExprOpt;
 
 extern ExprOpt proc_expr();
 
 // Expression type constants
 #define EXPR_INT    0
-#define EXPR_FLOAT  1
+#define EXPR_VAR    1
 #define EXPR_NEG    2
-#define EXPR_VAR    3
+#define EXPR_ADD    3
 end
 
 alloy c section
-lean_object* traverse_expr(ExprNode* ptr) {
+lean_object* traverse_expr(TaggedExpr* ptr) {
   if (ptr == NULL) {
     return lean_box(0);
   } else {
     lean_object* result;
 
-    switch (ptr->expr_type) {
+    switch (ptr->tag) {
       case EXPR_INT: {
-        // Create int expr
-        result = lean_alloc_ctor(0, 1, 0);
-        lean_ctor_set(result, 0, lean_box_int(ptr->integer));
+        result = lean_alloc_ctor(0, 1, 8);
+        lean_ctor_set(result, 0, lean_box(ptr->u.i));
         break;
       }
-
-      case EXPR_FLOAT: {
-        // Create float expr
-        result = lean_alloc_ctor(1, 1, 0);
-        lean_ctor_set(result, 0, lean_box_float(ptr->float_val));
-        break;
-      }
-
-      case EXPR_NEG: {
-        // Create neg expr
-        result = lean_alloc_ctor(2, 1, 0);
-        lean_ctor_set(result, 0, traverse_expr(ptr->neg));
-        break;
-      }
-
       case EXPR_VAR: {
-        // Create var expr
-        result = lean_alloc_ctor(3, 1, 0);
-        lean_object* name = lean_mk_string(ptr->var ? ptr->var : "");
-        lean_ctor_set(result, 0, name);
+        printf("DEBUG: In traverse_expr, handling EXPR_VAR with value: %s\n", ptr->u.var ? ptr->u.var : "NULL");
+        result = lean_alloc_ctor(1, 1, 8);
+        // Create a string first
+        lean_object* str = lean_mk_string(ptr->u.var ? ptr->u.var : "");
+        // Then create a Name.anonymous constructor
+        lean_object* name = lean_alloc_ctor(0, 0, 0);
+        // Then create a Name.str constructor with the anonymous name and the string
+        lean_object* name_str = lean_alloc_ctor(1, 2, 0);
+        lean_ctor_set(name_str, 0, name);
+        lean_ctor_set(name_str, 1, str);
+        lean_ctor_set(result, 0, name_str);
         break;
       }
-
+      case EXPR_NEG: {
+        printf("DEBUG: In traverse_expr, handling EXPR_NEG\n");
+        result = lean_alloc_ctor(2, 1, 8);
+        lean_ctor_set(result, 0, traverse_expr(ptr->u.neg));
+        break;
+      }
+      case EXPR_ADD: {
+        printf("DEBUG: In traverse_expr, handling EXPR_ADD\n");
+        result = lean_alloc_ctor(3, 2, 16);
+        lean_ctor_set(result, 0, traverse_expr(ptr->u.a.left));
+        lean_ctor_set(result, 1, traverse_expr(ptr->u.a.right));
+        break;
+      }
       default: {
-        // Default to int(0) for unknown types
-        result = lean_alloc_ctor(0, 1, 0);
-        lean_ctor_set(result, 0, lean_box_int(0));
+        result = lean_alloc_ctor(0, 1, 8);
+        lean_ctor_set(result, 0, lean_box(0));
       }
     }
-
     return result;
   }
 }
 end
 
 alloy c extern "process_expr" def process_expr (a : Unit) : Option Expr := {
-  printf("Entering process_expr\n");
   ExprOpt o = proc_expr();
-  printf("Exited proc_expr\n");
+
   if (!o.safe) {
+    printf("Unsafe object\n");
     return lean_box(0);
   } else {
+    printf("Safe object with tag: %d\n", o.ptr->tag);
     lean_object * ob = lean_alloc_ctor(1, 1, 8);
-    lean_ctor_set(ob, 0, traverse_expr(o.ptr));
+    lean_object * expr = traverse_expr(o.ptr);
+    printf("DEBUG: Created Lean expression\n");
+    lean_ctor_set(ob, 0, expr);
     return ob;
   }
 }
-
 
 inductive Tree :=
   | nil
@@ -161,9 +167,7 @@ inductive Tree :=
 instance : Inhabited Tree := ⟨.nil⟩
 
 alloy c extern "ct" def ct (a : Unit) : Option Tree := {
-  printf("Entering ct\n");
   Opt o = proc();
-  printf("Exited proc\n");
   if (!o.safe) {
     return lean_box(0);
   } else {
