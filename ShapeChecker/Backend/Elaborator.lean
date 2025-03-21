@@ -8,19 +8,6 @@ open Lean Elab Command Term Meta Tactic
 
 namespace ElabPy
 
-def safeSubtraction (a b : Nat) : Except String Nat := do
-  if b > a then throw "B was greater than a, aborting"
-  else return a - b
-
-def x : Except String Nat := do
-  try
-    let z <- throw "What"
-    return z
-  catch
-  | e => return 3
-
-#eval x
-
 #check Tensor.mk
 
 def unAnnot : Py.Shape -> CommandElabM (TSyntax `term) := λ s => do
@@ -30,12 +17,12 @@ def unAnnot : Py.Shape -> CommandElabM (TSyntax `term) := λ s => do
   | .var x => `($(mkIdent `Py.Shape.var) $(mkIdent x))
   -- | .cons .wildcard rest =>
   --   `($(mkIdent `Py.Shape.cons) $(mkIdent `Py.Shape.wildcard) $(<- unAnnot rest))
-  | .cons (.var x) rest =>
-    `($(mkIdent `Py.Shape.cons) ($(mkIdent `Py.ShapeData.var) $(mkIdent x)) $(<- unAnnot rest))
-  | .cons (.const n) rest =>
-    `($(mkIdent `Py.Shape.cons) $(quote n) $(<- unAnnot rest))
+  | .lift (.var x) =>
+    `($(mkIdent `Py.Shape.lift) ($(mkIdent `Py.ShapeData.var) $(mkIdent x)))
+  | .lift (.const n) =>
+    `($(mkIdent `Py.Shape.lift) $(quote n))
   | .append op1 op2 =>
-    `($(mkIdent `Py.Shape.append) $(<- unAnnot op1) $(<- unAnnot op2))
+    `($(mkIdent `Py.Shape.append) ($(<- unAnnot op1)) ($(<- unAnnot op2)))
 
 partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   match e with
@@ -48,8 +35,9 @@ partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   | .add left right => `(($(<- expr left) + $(<- expr right)))
   | .matmul left right => `(($(<- expr left) @ $(<- expr right)))
   | .call (.var n) args =>
-    if isPrimOp n then `($(<- fncall (.var n) args.reverse) (by resolvePrimOp))
-    else fncall (.var n) args.reverse
+    match isPrimOp n with
+    | .some _ => `($(<- fncall (.var n) args.reverse) (by resolvePrimOp))
+    | .none => fncall (.var n) args.reverse
   | .call fn args => fncall fn args.reverse
   | .list l => list l
   | .ones l | .zeros l | .random l => `($(mkIdent `Tensor.of) $(<- unAnnot l))

@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/local/lib/python3.13/site-packages/torch/include/torch/csrc/api/include/torch",
-                "/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versions/3.13/include/python3.13"
+                "/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versions/3.13/include/python3.13",
+                "/Users/markpock/.elan/toolchains/leanprover--lean4---v4.13.0/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

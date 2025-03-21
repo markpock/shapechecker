@@ -5,6 +5,7 @@ package "ShapeChecker" where
   leanOptions := #[
     ⟨`pp.unicode.fun, true⟩
   ]
+  -- extraCFlags := #["-I", (← getLeanIncludeDir).toString]
 
 require "leanprover-community" / "batteries" @ "git#v4.13.0"
 require "leanprover-community" / "mathlib" @ "git#v4.13.0"
@@ -23,8 +24,10 @@ lean_lib «ShapeChecker» where
 target ffi.o pkg : FilePath := do
   let oFile := pkg.buildDir / "native" / "ffi.o"
   let srcJob <- inputTextFile <| pkg.dir / "ShapeChecker" / "Frontend" / "PythonAdapter.c"
+  let leanIncludeDir ← getLeanIncludeDir
   let flags := #[
     "-I", "/opt/homebrew/opt/python@3.13/Frameworks/Python.framework/Versions/3.13/include/python3.13",
+    "-I", leanIncludeDir.toString,
     "-fPIC"
   ]
   buildO oFile srcJob flags

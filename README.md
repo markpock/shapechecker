@@ -5,54 +5,99 @@ This project explores a novel approach to static shape checking of tensor operat
 
 ### End to End Example of Our Pipeline 
 
+Take this annotation done by the deep learning programmer in PyTorch: 
 
-```
+```python
 def m(a: Tensor(3,4), b: Tensor(4,5)) -> Tensor(3,5):
     return a @ b
 ```
 
-This is converted to an AST
+**This is converted to an AST**:
 ```
-Function(
-    name = m
-    arguments = [
-        (name = a,
-        annotator = 'Tensor(3,4)',
-        positional = True),
-        ...
-    ], 
-    body = ('RETURN, expression = (variable a) @ (variable b)) 
+Module(
+    body=[
+        FunctionDef(
+            name='m',
+            args=arguments(
+                args=[
+                    arg(arg='a', annotation=Call(func=Name(id='Tensor', ctx=Load()), args=[Constant(value=3), Constant(value=4)], keywords=[])),
+                    arg(arg='b', annotation=Call(func=Name(id='Tensor', ctx=Load()), args=[Constant(value=4), Constant(value=5)], keywords=[]))
+                ],
+                vararg=None,
+                kwonlyargs=[],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[]
+            ),
+            body=[
+                Return(
+                    value=BinOp(left=Name(id='a', ctx=Load()), op=MatMult(), right=Name(id='b', ctx=Load()))
+                )
+            ],
+            decorator_list=[]
+        )
+    ]
 )
 ```
 
-This AST is then accessed in C: 
+**This AST is then accessed in C:**
 
 Goal: Creating typed objects to represent this AST so that it could be read in to Lean as an inductive types (which we need to represent in C as Tagged Expressions). 
 
 Read into C
 ```c
 PyObject *p -> contains body, arguments, name 
-
 ```
-
-Opt
 
 Create TaggedExpr
-```c
-typedef struct taggedUExpr {
-  int tag;
-  union uExpr {
-    int i;
-    char* var;
-    struct taggedUExpr* neg;
-    struct eAdd {
-      struct taggedUExpr* left;
-      struct taggedUExpr* right;
-    } a;
-  } u;
-} TaggedExpr;
-```
 
+```c
+// Structure to represent a function
+typedef struct Function {
+    char* name;                 // Function name
+    struct Parameter* params;   // Array of parameters
+    int param_count;            // Number of parameters
+    struct TaggedExpr* return_type; // Return type
+    struct TaggedExpr* body;    // Function body
+} Function;
+
+// Structure to represent a parameter
+typedef struct Parameter {
+    char* name;                 // Parameter name
+    struct TaggedExpr* type;    // Parameter type
+} Parameter;
+
+// Create the function 'm'
+Function* create_function_m() {
+    Function* func = (Function*)malloc(sizeof(Function));
+    func->name = strdup("m");
+    
+    // Create parameters
+    func->param_count = 2;
+    func->params = (Parameter*)malloc(sizeof(Parameter) * func->param_count);
+    
+    // Parameter 'a: Tensor(3,4)'
+    func->params[0].name = strdup("a");
+    TaggedExpr* tensor_3_4 = createTensorType(createConstant(3), createConstant(4));
+    func->params[0].type = tensor_3_4;
+    
+    // Parameter 'b: Tensor(4,5)'
+    func->params[1].name = strdup("b");
+    TaggedExpr* tensor_4_5 = createTensorType(createConstant(4), createConstant(5));
+    func->params[1].type = tensor_4_5;
+    
+    // Return type 'Tensor(3,5)'
+    func->return_type = createTensorType(createConstant(3), createConstant(5));
+    
+    // Function body 'return a @ b'
+    TaggedExpr* var_a = createVariable("a");
+    TaggedExpr* var_b = createVariable("b");
+    TaggedExpr* matmul = createMatrixMult(var_a, var_b);
+    func->body = createReturn(matmul);
+    
+    return func;
+}
+```
 
 Create traverse_expr turns taggedUExpr to a Lean object.
 
@@ -60,19 +105,20 @@ Create traverse_expr turns taggedUExpr to a Lean object.
 exprToC: (PyObject *value)
 
 
-
 What is the ultimate output that we want? 
 = A Lean Object given the values we define in Python 
 
 
+To run this:
+```sh
+lake exe ShapeCheckerExe
+```
 
 
 
 
 
-
-
-
+---
 
 
 
@@ -107,12 +153,6 @@ Follow the instructions on the Lean 4 installation guide.
 
 
 ### Usage: 
-
-
-```
-lake exe ShapeCheckerExe
-<!-- compile the Lean code in your project into an executable format. This allows you to run Lean programs directly from the command line. -->
-```
 
 ~TBD
 
