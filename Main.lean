@@ -124,7 +124,7 @@ where
       | .assign n v => match v.toPyExpr with
         | .error _ => throwError "Invalid expression in function body"
         | .ok e => body := .assign n e :: body
-    return body
+    return body.reverse
   retType (s : String) : CommandElabM $ Py.Typ := do
     match parseType s with
     | .error _ => throwError s!"Invalid type specification in output; output was {s}"
@@ -152,7 +152,7 @@ def main (s : List String) : IO Unit := do
     initSearchPath ⟨"/Users/markpock/.elan/toolchains/leanprover--lean4---v4.13.0"⟩
     let result <- doElab ⟨outfile⟩
       |>.run ∅
-      |>.run {env := <- importModules #[`Init] .empty, maxRecDepth := 1000}
+      |>.run {env := <- importModules #[`Init, `ShapeChecker, `ShapeChecker.Backend.Verifier] .empty, maxRecDepth := 1000}
       |>.toIO'
     match result with
     | .ok _ => .println "Compilation complete"

@@ -1,121 +1,97 @@
 import Lean
 import ShapeChecker.Backend.Basic
-import ShapeChecker.Backend.Tensors
-import Mathlib.Tactic
+-- import Mathlib
+-- import Mathlib.Tactic
+-- import Mathlib.Data.Finset.Basic
 
--- def ElementwiseCompatible (a b : Py.Shape) : Prop := a = b
+open Lean (Name)
 
--- -- l ++ [a, n], l ++ [n, b]
--- inductive MatMulRel : Py.Shape → Py.Shape → Prop :=
---   -- Base case: [m, n] and [n, d]
---   | baseCase (m n d : Nat) :
---     MatMulRel
---       [m, n]
---       [n, d]
---   -- General case: l ++ [m, n] and l ++ [n, d]
---   | generalCase (l : List Nat) (m n d : Nat) :
---     MatMulRel
---       (l ++ [m, n])
---       (l ++ [n, d])
---     ->
---     MatMulRel
---       (a::l ++ [m, n])
---       (a::l ++ [n, d])
+-- namespace Py
+-- namespace Shape
+-- @[simp] def listVars : Shape -> Finset Name
+--   | .nil | .lift _ => ∅
+--   | .append s₁ s₂ => s₁.listVars ∪ s₂.listVars
+--   | .var x => {x}
 
--- namespace PrimOp
+-- @[simp] def dataVars : Shape -> Finset Name
+--   | .lift (.var x) => {x}
+--   | .append s₁ s₂ => s₁.dataVars ∪ s₂.dataVars
+--   | _ => ∅
 
+-- def safe (f : Name -> Option V) (s : Finset Name) := ∀ x ∈ s, f x ≠ .none
 
+-- def safe.left : safe f (s₁ ∪ s₂) -> safe f s₁ := by
+--   unfold safe; intros H x h; apply H; simp; tauto
 
--- -- Matrix multiplication operation
--- def matmul :
---   Tensor (l ++ [m, n]) →
---   Tensor (l ++ [n, d]) →
---   MatMulRel (l ++ [m, n]) (l ++ [n, d]) →
---   Tensor (l ++ [m, d]) :=
---   λ _ _ _ => .mk
+-- def safe.right : safe f (s₁ ∪ s₂) -> safe f s₂ := by
+--   unfold safe; intros H x h; apply H; simp; tauto
 
--- -- variable (MMR : Py.Shape -> Py.Shape -> Py.Shape -> Type)
+-- @[simp] def eval (s : Shape) (lv : Name -> Option (List Nat)) (dv : Name -> Option Nat) :
+--   safe lv s.listVars -> safe dv s.dataVars -> List Nat := λ h1 h2 => match h : s with
+--   | .nil => .nil
+--   | .lift (.const k) => [k]
+--   | .lift (.var v) => match h' : dv v with
+--     | .some x => [x]
+--     | .none => by simp at h2; unfold safe at h2; simp_all
+--   | .append s₁ s₂ => by simp_all; exact (
+--     s₁.eval lv dv h1.left h2.left ++
+--     s₂.eval lv dv h1.right h2.right)
+--   | .var v => match h' : lv v with
+--     | .some x => x
+--     | .none => by simp at h1; unfold safe at h1; simp_all
 
--- -- Elementwise addition operation
--- def add : Tensor a → Tensor b → ElementwiseCompatible a b → Tensor a :=
---   λ _ _ _ => .mk
+-- def equiv (s₁ s₂ : Shape) := ∀ lv₁ lv₂ dv₁ dv₂,
+--   (s1 : safe lv₁ s₁.listVars) -> (s2 : safe dv₁ s₁.dataVars) ->
+--   (s3 : safe lv₂ s₂.listVars) -> (s4 : safe dv₂ s₂.dataVars) ->
+--   (∀ x ∈ s₁.dataVars ∩ s₂.dataVars, dv₁ x = dv₂ x) ->
+--   (∀ x ∈ s₁.listVars ∩ s₂.listVars, lv₁ x = lv₂ x) ->
+--   s₁.eval lv₁ dv₁ s1 s2 = s₂.eval lv₂ dv₂ s3 s4
 
--- end PrimOp
+-- def equiv.refl : ∀ s : Shape, s.equiv s := by
+--   let this : ∀ {α} {x : α}, ∀ f : False, f.elim = x := by tauto
+--   intro s; unfold Shape.equiv; intro lv₁ lv₂ dv₁ dv₂ s1 s2 s3 s4 interD interL
+--   induction s <;> (try simp_all)
+--   case var =>
+--     split; swap; apply this
+--     split; swap; symm; apply this
+--     simp_all
+--   case lift data => cases data <;> simp_all; case var =>
+--     split; swap; apply this
+--     split; swap; symm; apply this
+--     simp_all
+--   case append op1 op2 ih1 ih2 =>
+--     have : ∀ {l1 l2 l3 l4 : List Nat}, l1 = l2 -> l3 = l4 -> l1 ++ l3 = l2 ++ l4 := by simp
+--     apply this
+--     apply ih1
+--     apply ih2
 
+-- def equiv.symm : ∀ s1 s2 : Shape, s1.equiv s2 -> s2.equiv s1 := by
+--   unfold Shape.equiv
+--   intros s1 s2 eq lv₁ lv₂ dv₁ dv₂ s1 s2 s3 s4 interD interL; symm
+--   apply eq <;> (rw [Finset.inter_comm]; intros; symm)
+--   apply interD; assumption
+--   apply interL; assumption
 
--- open Lean Tactic
+-- -- @[aesop safe] def heuristic (A : Shape) : A.equiv (.append .nil A) := by
+-- --   unfold Shape.equiv; intros lv₁ lv₂ dv₁ dv₂ s1 s2 s3 s4 interD interL
+-- --   rw [Shape.eval, Shape.eval]; simp
+-- --   simp at interD; simp at interL
+-- --   apply equiv.refl
+-- --   simp; assumption
+-- --   simp; assumption
 
--- syntax "resolve_prim_op_trivial" : tactic
-
--- macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| omega)
--- macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| simp; done)
--- macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| trivial)
--- macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| constructor)
--- macro_rules | `(tactic| resolve_prim_op_trivial) => `(tactic| simp_all)
-
--- macro "resolvePrimOp" : tactic => `(tactic| first
---   | assumption
---   | resolve_prim_op_trivial
---   | fail "Failed to resolve primitive operation"
--- )
-
--- ⟦x⟧ = ⟦y⟧ ++ ⟦z⟧
--- x ~ y ++ z
-
--- @[aesop safe] def MMR (A B C : Py.Shape) : Prop :=
---   ∃ l m n d,
---   A ~ l ++ [m, n] ∧
---   B ~ l ++ [n, d] ∧
---   C ~ l ++ [m, d]
-
--- def matmul :
---   Tensor A ->
---   Tensor B ->
---   (H : { C : Py.Shape // MMR A B C }) ->
---   Tensor H.1 :=
---   λ _ _ _ => .mk
-
-
--- def x (a : Tensor [3, 4]) (b : Tensor [4, 5]) :=
---   matmul a b (by
---     use ?_; unfold MMR;
-
-
---     use ?_; unfold MMR; exists []; exists 3; exists 4; exists 5; congr
---     simp_all only [List.nil_append, true_and]
---     have : [3, 5] = [3, 5] := by rfl
---     exact this
+-- end Shape
+-- end Py
 
 
+def ElementwiseCompatible (a b c : Py.Shape) : Prop :=
+  a = b /\ b = c
+  -- a.equiv b /\ b.equiv c
 
---     refine ⟨?C, ?pf⟩; case pf =>
---     unfold MMR
---     repeat constructor
---     have : [3, 4] = [] ++ [3, 4] := by simp
---     exact this
---     have : [4, 5] = [] ++ [4, 5] := by simp
---     constructor
---     exact this
---     have : [3, 5] = [] ++ [3, 5] := by rfl
---     exact this
---   )
+namespace Tensor
+namespace PrimOp
 
+def add (_ : Tensor l₁) (_ : Tensor l₂) (r : { l₃ // ElementwiseCompatible l₁ l₂ l₃ }) : Tensor r.1 := .mk
 
--- def y (a : Tensor [3, 4]) (b : Tensor [4, 5]) :=
---   matmul a b (by refine ⟨?C, ?pf⟩; case pf =>
---     unfold MMR
---     repeat constructor
---     have : [3, 4] = [] ++ [3, 4] := by simp
---     exact this
---     have : [4, 5] = [] ++ [4, 5] := by simp
---     constructor
---     exact this
---     have : [3, 5] = [] ++ [3, 5] := by rfl
---     exact this
---   )
-
--- theorem silly : 2 + 1 = 3 := by simp
-
--- example : ∃ n, n + 1 = 3 := by
---   exists ?_
---   case refine_2 => exact silly
+end PrimOp
+end Tensor

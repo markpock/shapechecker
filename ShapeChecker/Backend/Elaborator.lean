@@ -1,10 +1,13 @@
 import Lean
 import ShapeChecker.Backend.Basic
 import ShapeChecker.Backend.AST
-import ShapeChecker.Backend.Tensors
 import ShapeChecker.Backend.Verifier
 
 open Lean Elab Command Term Meta Tactic
+
+def PrimOp.name : PrimOp -> Name
+  | .add => `Tensor.PrimOp.add
+  | .matmul => `Tensor.PrimOp.matmul
 
 namespace ElabPy
 
@@ -13,10 +16,7 @@ namespace ElabPy
 def unAnnot : Py.Shape -> CommandElabM (TSyntax `term) := λ s => do
   match s with
   | .nil => `($(mkIdent `Py.Shape.nil))
-  -- | .wildcard => return mkIdent `Py.Shape.wildcard
   | .var x => `($(mkIdent `Py.Shape.var) $(mkIdent x))
-  -- | .cons .wildcard rest =>
-  --   `($(mkIdent `Py.Shape.cons) $(mkIdent `Py.Shape.wildcard) $(<- unAnnot rest))
   | .lift (.var x) =>
     `($(mkIdent `Py.Shape.lift) ($(mkIdent `Py.ShapeData.var) $(mkIdent x)))
   | .lift (.const n) =>
@@ -32,20 +32,22 @@ partial def expr (e : Py.Expr) : CommandElabM (TSyntax `term) := do
   | .float n => return Syntax.mkScientificLit (toString n)
   | .neg arg => `((-$(<- expr arg)))
   | .var v => return mkIdent v
-  | .add left right => `(($(<- expr left) + $(<- expr right)))
-  | .matmul left right => `(($(<- expr left) @ $(<- expr right)))
+  | .add left right => `($(mkIdent `Tensor.PrimOp.add) ($(<- expr left)) ($(<- expr right)) (by resolvePrimOp))
+  | .matmul left right => `($(mkIdent `Tensor.PrimOp.matmul) ($(<- expr left)) ($(<- expr right)) (by resolvePrimOp))
   | .call (.var n) args =>
     match isPrimOp n with
-    | .some _ => `($(<- fncall (.var n) args.reverse) (by resolvePrimOp))
-    | .none => fncall (.var n) args.reverse
-  | .call fn args => fncall fn args.reverse
+    | .some k => `($(<- fncall (.inl $ k.name) args.reverse) (by resolvePrimOp))
+    | .none => fncall (.inr $ .var n) args.reverse
+  | .call fn args => fncall (.inr fn) args.reverse
   | .list l => list l
   | .ones l | .zeros l | .random l => `($(mkIdent `Tensor.of) $(<- unAnnot l))
   | _ => throwError "Currently unimplemented" -- TODO
 where
-  fncall (fn : Py.Expr) (args : List Py.Expr) : CommandElabM (TSyntax `term) := do
+  fncall (fn : Name ⊕ Py.Expr) (args : List Py.Expr) : CommandElabM (TSyntax `term) := do
     match args with
-    | [] => expr fn
+    | [] => match fn with
+      | .inl n => `($(mkIdent n))
+      | .inr v => `($(<- expr v))
     | x::xs => `(($(<- fncall fn xs) $(<- expr x)))
   list (l : List Py.Expr) : CommandElabM (TSyntax `term) := do
     match l with
